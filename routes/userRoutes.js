@@ -59,6 +59,7 @@ router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdat
 
 //View
 router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.viewAllData);
+router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolist);
 
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
