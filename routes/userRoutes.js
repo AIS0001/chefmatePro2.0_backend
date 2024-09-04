@@ -58,6 +58,7 @@ router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
 
 //View
+router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);
 router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.viewAllData);
 router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolist);
 

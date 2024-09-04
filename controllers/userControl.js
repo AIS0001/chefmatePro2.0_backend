@@ -71,6 +71,7 @@ const login = (req, res) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
+  console.log(`SELECT * FROM users WHERE uname=${db.escape(req.body.uname)}`);
   db.query(
     `SELECT * FROM users WHERE uname=${db.escape(req.body.uname)};`,
     (err, result) => {
