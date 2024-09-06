@@ -119,7 +119,7 @@ const fetchData = (req, res) => {
   
   const queryParams = [tblname, orderby];
   const formattedQuery = db.format(query, queryParams);
-  // console.log('Formatted Query:', formattedQuery);
+   console.log('Formatted Query:', formattedQuery);
   // Execute the query
   db.query(formattedQuery, (error, results) => {
     if (error) {
