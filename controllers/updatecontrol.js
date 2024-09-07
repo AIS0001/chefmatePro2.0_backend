@@ -8,23 +8,38 @@ const csv = require('csv-parser')
 const updateDataPara1 = (req, res) => {
   const authToken = req.headers.authorization.split(' ')[1]
   const table = [req.params.tablename]
-  const inv = [req.body.inv]
+  const pass = [req.body.pass]
   const col1 = [req.params.col1]
   const val1 = [req.params.val1]
-  console.log(`UPDATE ${table} SET inv= ${inv} where ${col1}= ${val1}`)
-  db.query(
-    `UPDATE ${table} SET inv= ${inv} where ${col1}= ${val1}`,
-    (err, result) => {
-      if (err) {
-        return res.status(400).send({
-          msg: err
-        })
-      }
-      return res.status(200).send({
-        msg: 'Data updated'
-      })
+ 
+  bcrypt.hash(req.body.pass, 10, (err, hash) => 
+    {
+    if (err) {
+      return res.status(400).send({
+        msg: hash,
+      });
+    } 
+    else {
+      //insert data into database
+     console.log(`UPDATE ${table} SET pass= '${hash}' where ${col1}= '${val1}'`);
+        db.query(
+          `UPDATE ${table} SET pass= '${hash}' where ${col1}= '${val1}'`,
+          (err, result) => {
+            if (err) {
+              return res.status(400).send({
+                msg: err
+              })
+            }
+            return res.status(200).send({
+              msg: 'Data updated'
+            })
+          }
+        )
     }
-  )
+  });
+
+
+  
 }
 const updateStatus = (req, res) => {
   const authToken = req.headers.authorization.split(' ')[1]
