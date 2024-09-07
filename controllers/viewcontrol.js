@@ -29,7 +29,7 @@ const viewAllData = (req, res) => {
   const decode = jwt.verify(authToken, jwt_secret)
   const table = [req.params.tablename]
   const id = [req.params.orderby]
- // console.log(`SELECT * FROM ${table} order by ${id}  DESC`);
+  // console.log(`SELECT * FROM ${table} order by ${id}  DESC`);
   db.query(
     `SELECT * FROM ${table} order by ${id}  DESC`,
     function (err, result, fields) {
@@ -49,7 +49,7 @@ const combolist = (req, res) => {
 
   const table = [req.params.tablename]
   const id = [req.params.groupby]
-  console.log(`SELECT * FROM ${table} group by ${id} `);
+ // console.log(`SELECT * FROM ${table} group by ${id} `);
   db.query(
     `SELECT * FROM ${table} group by ${id}  `,
     function (err, results, fields) {
@@ -88,7 +88,6 @@ const fetchData = (req, res) => {
   const orderby = req.params.orderby;
   const where = req.params[0] ? decodeURIComponent(req.params[0]) : '';
 
-
   // Validate inputs
   if (!tblname || !orderby) {
     return res.status(400).json({
@@ -106,20 +105,24 @@ const fetchData = (req, res) => {
   for (const [key, value] of params.entries()) {
     conditions.push(`${key}="${value}"`);
   }
-  const whereClause = conditions.join(' AND ');
+  const whereClause = conditions.length > 0 ? conditions.join(' AND ') : null;
 
   // Construct the SQL query
-  if(whereClause)
-  {
-    const query = `SELECT * FROM ?? WHERE ${whereClause} ORDER BY ??`;
-  }
-  else{
-    const query = `SELECT * FROM ??  ORDER BY ??`;
-  }
-  
+  let query;
   const queryParams = [tblname, orderby];
+
+  if (whereClause) {
+    query = `SELECT * FROM ?? WHERE ${whereClause} ORDER BY ??`;
+  } else {
+    query = `SELECT * FROM ?? ORDER BY ??`;
+  }
+
+  // Log the query for debugging
+  //console.log('Constructed Query:', query);
+
   const formattedQuery = db.format(query, queryParams);
-   console.log('Formatted Query:', formattedQuery);
+ // console.log('Formatted Query:', formattedQuery);
+
   // Execute the query
   db.query(formattedQuery, (error, results) => {
     if (error) {
@@ -138,6 +141,7 @@ const fetchData = (req, res) => {
     });
   });
 };
+
 module.exports = {
 
   allUsers,
