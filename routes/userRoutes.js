@@ -12,41 +12,17 @@ const multer = require('multer');
 
 
 //const { jwt_secret } = process.env;
-
+// Configure Multer storage
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-      if(file.mimetype=='image/png')
-      {
-        cb(null, 'uploads/');
-      }
-      
-    },
-    filename: function (req, file, cb) {
-      cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-    }
-  });
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  },
+});
 
-  const fileFilter = (req,file,cb)=>{
-    if(file.fieldname==="stamp")
-    {
-      (file.mimetype==='image/png')
-      ?cb(null,true)
-      :(null,false);
-    }
-   else if(file.fieldname==="sign")
-    {
-      (file.mimetype==='image/png')
-      ?cb(null,true)
-      :(null,false);
-    }
-    
-  };
-  
-  const upload = multer({
-     storage: storage, 
-    fileFilter:fileFilter
-    }).fields([{name:'stamp',maxcount:1},{name:'sign',maxcount:1}]);
-
+const upload = multer({ storage: storage });
 router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
@@ -56,6 +32,7 @@ router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 
 //Insert Data 
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
+router.post('/addnewproduct/:tablename', upload.array('images', 10), auth.isAuthorize, insertcontroller.addNewProduct);
 
 //View
 router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);

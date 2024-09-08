@@ -36,29 +36,28 @@ const insertdata = (req, res) => {
   )
 }
 
-const insertdata1 = (req, res) => {
-  const table = [req.params.tablename]
-
-  const { filename1 } = req.body.stamp
-  const { filename2 } = req.body.sign
-  const { originalname, mimetype, size, path } = req.file
-  const imageData = fs.promises.readFile(path)
-
-  const stamps = `http://localhost:4500/uploads/${filename1}`
-  const signs = `http://localhost:4500/uploads/${filename2}`
-
-  const { files } = req
-  const imageUrls = files.map(
-    file => `http://localhost:4500/uploads/${file.filename}`
-  )
-  const sql = 'INSERT INTO company_details (url) VALUES ?'
-  db.query(sql, [imageUrls.map(url => [url])], (err, result) => {
+const addNewProduct = (req, res) => {
+  const product_id = req.body.product_id;
+  
+  const files = req.files.map(file => [
+    product_id,
+    file.filename,
+    file.path,
+    file.mimetype,
+    file.size,
+    
+  ]);
+  const query = 'INSERT INTO images (product_id,filename, path, mimetype, size) VALUES ?';
+  console.log(query);
+  db.query(query, [files], (err, results) => {
     if (err) {
-      throw err
+      console.error('Failed to insert images into database:', err);
+      return res.status(500).json({ message: 'Failed to upload images', error: err });
     }
-    console.log('Images uploaded to MySQL database')
-    res.send('Images uploaded successfully')
-  })
+    res.status(200).json({ message: 'Images uploaded and saved to database successfully!', images: results });
+  });
+
+ 
 }
 //Upload multiple images
 const uploadcsv = (req, res) => {
@@ -91,6 +90,6 @@ const uploadcsv = (req, res) => {
 module.exports = {
   
   insertdata,
-  insertdata1,
+  addNewProduct,
   uploadcsv,
 }

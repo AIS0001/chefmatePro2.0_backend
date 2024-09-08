@@ -16,7 +16,7 @@ process.on('unhandledRejection', (reason, promise) => {
   // Optionally, you can log the stack trace of the promise:
   // console.error(reason.stack);
 });
-
+const path = require('path');
 const express = require("express");
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -25,6 +25,8 @@ const userRouters = require('./routes/userRoutes.js');
 require('./config/dbconnection');
 
 const app = express();
+//Serve static files from the 'uploads' directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
