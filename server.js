@@ -46,4 +46,4 @@ app.use((err, req, res, next) => {
 // Register the error handling middleware
 app.use(errorHandlerMiddleware);
 
-app.listen(4401, () => console.log('local server connected at port 4401'))
+app.listen(4402, () => console.log('local server connected at port 4402'))
