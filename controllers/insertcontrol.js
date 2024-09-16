@@ -26,8 +26,11 @@ const insertdata = (req, res) => {
         })
       }
       else{
+        // result.insertId typically contains the auto-incremented ID of the newly inserted record
+        const insertedId = result.insertId; // Get the inserted record's ID
         return res.status(200).send({
-            msg: 'Data saved successfully'
+            msg: 'Data saved successfully',
+            id: insertedId,  // Return the newly inserted ID or any relevant data
           })
 
       }
