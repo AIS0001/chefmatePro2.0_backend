@@ -44,7 +44,7 @@ router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontrol
 
 
 //delete data 
-router.delete('/deletebyid/:tablename/:id/:colid',auth.isAuthorize,deletecontroller.deletedatabyid);
+router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);
 
 
 module.exports=router
