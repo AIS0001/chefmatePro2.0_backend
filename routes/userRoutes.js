@@ -41,6 +41,7 @@ router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.comb
 
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
+router.put('/updatedata/:tablename/:para1/:para2/',auth.isAuthorize,updatecontroller.updatedata);
 
 
 //delete data 

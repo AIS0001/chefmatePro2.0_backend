@@ -123,9 +123,40 @@ const updateCompanyInfo = (req, res) => {
     }
   )
 }
+
+const updatedata = (req, res) => {
+  const table = req.params.tablename;
+  const para1 = req.params.para1; // Get the id from the URL parameter
+  const para2 = req.params.para2; // Get the agent_id from the URL parameter
+  const updatedData = req.body; // Get the updated data from the request body
+
+  // Construct query
+  const updateQuery = `UPDATE ?? SET ? WHERE id = ? AND agent_id = ?`;
+
+  // Execute the query using a callback function
+  db.query(updateQuery, [table, updatedData, para1, para2], (error, result) => {
+    if (error) {
+      console.error("Error updating listing:", error);
+      return res.status(500).json({ success: false, message: 'Error updating Data', error });
+    }
+
+    //console.log(result.affectedRows); // Check affectedRows for debugging
+
+    // If the update was successful, send a success response
+    if (result.affectedRows > 0) {
+      res.status(200).json({ success: true, message: 'Data updated successfully' });
+    } else {
+      res.status(404).json({ success: false, message: 'Data not found' });
+    }
+  });
+};
+
+
+
 module.exports = {
   updateDataPara1,
   updateStatus,
   updateStatus1,
-  updateCompanyInfo
+  updateCompanyInfo,
+  updatedata
 }
