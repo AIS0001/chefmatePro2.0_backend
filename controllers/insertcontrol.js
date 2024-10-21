@@ -41,6 +41,8 @@ const insertdata = (req, res) => {
 
 const addNewProduct = (req, res) => {
   const product_id = req.body.product_id;
+  //const tbl = req.params.tablename;
+  const tbl = [req.params.tablename]
   
   const files = req.files.map(file => [
     product_id,
@@ -50,7 +52,7 @@ const addNewProduct = (req, res) => {
     file.size,
     
   ]);
-  const query = 'INSERT INTO images (product_id,filename, path, mimetype, size) VALUES ?';
+  const query = `INSERT INTO ${tbl} (product_id,filename, path, mimetype, size) VALUES ?`;
   console.log(query);
   db.query(query, [files], (err, results) => {
     if (err) {

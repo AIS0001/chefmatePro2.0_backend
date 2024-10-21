@@ -23,7 +23,30 @@ const allUsers = (req, res) => {
     }
   )
 }
+const combolistwithWhere = (req, res) => {
+  const { where } = req.query;
+  const table = [req.params.tablename]
+  const id = [req.params.groupby]
+  // console.log(`SELECT * 
+  //   FROM ${table} 
+  //   ${where ? `WHERE ${where}` : ""}
+  //   group by ${id}`);
+  db.query(
+    `SELECT * 
+    FROM ${table} 
+    ${where ? `WHERE ${where}` : ""}
+    group by ${id}`,
+    
+    function (err, results, fields) {
+      if (err) {
+        res.status(500).send('Error fetching data from the database');
+        return;
+      }
+      res.json(results);
 
+    }
+  )
+}
 const viewAllData = (req, res) => {
   const authToken = req.headers.authorization.split(' ')[1]
   const decode = jwt.verify(authToken, jwt_secret)
@@ -141,7 +164,26 @@ const fetchData = (req, res) => {
     });
   });
 };
+const fetchDataFromTwoTables = (req, res) => {
+  const { tbl1, tbl2, col1, col2, orderby } = req.params;
+  const { where } = req.query;
 
+  const query = `
+      SELECT t1.*, t2.*
+      FROM ${tbl1} t1
+      INNER JOIN ${tbl2} t2 ON t1.${col1} = t2.${col2}
+      ${where ? `WHERE ${where}` : ""}
+      ${orderby ? `ORDER BY ${orderby}` : ""}`;
+  
+  console.log(query);
+
+  db.query(query, (err, results) => {
+      if (err) {
+          return res.status(500).json({ error: "Database error" });
+      }
+      res.json({ data: results });
+  });
+};
 module.exports = {
 
   allUsers,
@@ -149,5 +191,7 @@ module.exports = {
   viewAllData,
   viewAllDataLimit,
   fetchData,
+  combolistwithWhere,
+  fetchDataFromTwoTables,
 
 }
