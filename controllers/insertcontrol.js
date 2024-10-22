@@ -39,6 +39,49 @@ const insertdata = (req, res) => {
   )
 }
 
+
+const insertdatabulk = (req, res) => {
+  // Check if the table name is provided and is a valid string
+  const tableName = req.params.tablename;
+  const validTableNames = ['order_items']; // Add valid table names to this array
+  
+  if (!validTableNames.includes(tableName)) {
+    return res.status(400).send({ success: false, message: 'Invalid table name' });
+  }
+
+  const items = req.body.items; // Get the items array
+
+  // Check if items is provided and is an array with at least one item
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).send({ success: false, message: 'No items provided' });
+  }
+
+  const values = items.map(item => [
+    item.order_number,
+    item.item_name,
+    item.quantity,
+    item.total_amount,
+  ]);
+
+  // Bulk insert query
+  const query = `INSERT INTO ${tableName} (order_id,  item_name, quantity, total_price) VALUES ?`;
+
+  // Log the query and its values for debugging
+  console.log('Executing query:', query);
+  console.log('With values:', values);
+
+  db.query(query, [values], (err, results) => {
+    if (err) {
+      console.error('Error saving order items:', err); // Log the error
+      return res.status(500).send({ success: false, message: 'Error saving order items' });
+    }
+
+    res.send({ success: true, message: 'Order items saved successfully' });
+  });
+};
+
+
+
 const addNewProduct = (req, res) => {
   const product_id = req.body.product_id;
   //const tbl = req.params.tablename;
@@ -95,6 +138,7 @@ const uploadcsv = (req, res) => {
 module.exports = {
   
   insertdata,
+  insertdatabulk,
   addNewProduct,
   uploadcsv,
 }
