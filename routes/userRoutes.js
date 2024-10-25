@@ -41,6 +41,9 @@ router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.vi
 router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolist);
 router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolistwithWhere);
 router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAuthorize,viewcontroller.fetchDataFromTwoTables);
+
+//Get
+router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
 router.put('/updatedata/:tablename/:para1/:para2/',auth.isAuthorize,updatecontroller.updatedata);

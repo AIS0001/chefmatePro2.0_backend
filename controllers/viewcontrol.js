@@ -184,8 +184,33 @@ const fetchDataFromTwoTables = (req, res) => {
       res.json({ data: results });
   });
 };
-module.exports = {
 
+
+const getMaxOrderNumber = (req,res)=>{
+ const col1 = req.params.col1;
+ const val1 = req.params.val1;
+ const table = req.params.tbl;
+ const field1 = req.params.field;
+ // Query to get the maximum order number and increment it by 1
+const query = `SELECT IFNULL(MAX(${field1}),1) AS maxOrderNumber FROM ${table} WHERE ${col1} = ?`;
+
+db.query(query, [val1], (err, results) => {
+  if (err) throw err;
+
+  let newOrderNumber = 1; // Default value if no orders found
+
+  if (results[0].maxOrderNumber !== null) {
+    newOrderNumber = results[0].maxOrderNumber + 1;
+  }
+  res.json({ data: newOrderNumber });
+
+  console.log(`New order number for user ${col1} is: ${newOrderNumber}`);
+
+});
+};
+
+module.exports = {
+  getMaxOrderNumber,
   allUsers,
   combolist,
   viewAllData,
