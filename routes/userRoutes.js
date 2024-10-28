@@ -44,6 +44,7 @@ router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAut
 
 //Get
 router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);
+router.get('/getrunningtable/:tbl',auth.isAuthorize,viewcontroller.getRunningTable);
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
 router.put('/updatedata/:tablename/:para1/:para2/',auth.isAuthorize,updatecontroller.updatedata);

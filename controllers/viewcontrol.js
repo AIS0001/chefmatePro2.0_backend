@@ -209,6 +209,43 @@ db.query(query, [val1], (err, results) => {
 });
 };
 
+const getRunningTable =(req,res)=>{
+  const col1 = req.params.col1;
+  const val1 = req.params.val1;
+  const table = req.params.tbl;
+
+  const query = `SELECT *
+FROM ${table}
+WHERE   invoice_number IS NULL;
+`;
+db.query(query, (err, results) => {
+  if (err) throw err;
+
+  res.json({ data: results });
+
+  console.log(`Running table List: `);
+
+});
+}
+const getRunningTable1 =(req,res)=>{
+  const col1 = req.params.col1;
+  const val1 = req.params.val1;
+  const table = req.params.tbl;
+
+  const query = `SELECT *
+FROM ${table}
+WHERE ${col1} = ? AND invoice_number IS NULL;
+`;
+db.query(query, [val1], (err, results) => {
+  if (err) throw err;
+
+  res.json({ data: results });
+
+  console.log(`New order number for user ${col1} is: ${newOrderNumber}`);
+
+});
+}
+
 module.exports = {
   getMaxOrderNumber,
   allUsers,
@@ -218,5 +255,6 @@ module.exports = {
   fetchData,
   combolistwithWhere,
   fetchDataFromTwoTables,
+  getRunningTable,
 
 }
