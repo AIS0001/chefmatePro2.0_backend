@@ -45,10 +45,12 @@ router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAut
 //Get
 router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);
 router.get('/getrunningtable/:tbl',auth.isAuthorize,viewcontroller.getRunningTable);
+router.get('/getrunningtable/:tbl',auth.isAuthorize,viewcontroller.getOrderDetailsWithSubtotals);
+router.get('/getorderdetails/:table1/:table2',auth.isAuthorize,viewcontroller.getOrderDetailsWithSubtotals);
+
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
-router.put('/updatedata/:tablename/:para1/:para2/',auth.isAuthorize,updatecontroller.updatedata);
-
+router.put('/updatedata/:tablename',auth.isAuthorize,updatecontroller.updatedata);
 
 //delete data 
 router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);

@@ -124,30 +124,60 @@ const updateCompanyInfo = (req, res) => {
   )
 }
 
-const updatedata = (req, res) => {
+const updatedata34 = (req, res) => {
   const table = req.params.tablename;
-  const para1 = req.params.para1; // Get the id from the URL parameter
-  const para2 = req.params.para2; // Get the agent_id from the URL parameter
-  const updatedData = req.body; // Get the updated data from the request body
+  const col1 = req.params.col1; // ID field for the condition
+  const val1 = req.params.val1; // ID field for the condition
+  const updatedData = req.body; // Updated fields and values
+  
+  // Construct query with dynamic field updates
+  const updateQuery = `UPDATE ?? SET ? WHERE ${col1} = ? `;
 
-  // Construct query
-  const updateQuery = `UPDATE ?? SET ? WHERE id = ? AND agent_id = ?`;
-
-  // Execute the query using a callback function
-  db.query(updateQuery, [table, updatedData, para1, para2], (error, result) => {
+  // Execute the query
+  db.query(updateQuery, [table, updatedData, val1], (error, result) => {
     if (error) {
-      console.error("Error updating listing:", error);
-      return res.status(500).json({ success: false, message: 'Error updating Data', error });
+      console.error("Error updating data:", error);
+      return res.status(500).json({ success: false, message: 'Error updating data', error });
     }
 
-    //console.log(result.affectedRows); // Check affectedRows for debugging
-
-    // If the update was successful, send a success response
+    // Check if the update affected any rows
     if (result.affectedRows > 0) {
       res.status(200).json({ success: true, message: 'Data updated successfully' });
     } else {
       res.status(404).json({ success: false, message: 'Data not found' });
     }
+  });
+};
+const updatedata = (req, res) => {
+  const table = req.params.tablename;
+  const { updatedFields, where } = req.body;
+
+  //console.log("Table:", table);
+ // console.log("Updated Fields:", updatedFields);
+  //console.log("Where Conditions:", where);
+
+  // Construct WHERE clause dynamically
+  const whereConditions = Object.keys(where)
+      .map(key => `${key} = ?`)
+      .join(' AND ');
+
+  // Extract values for placeholders
+  const whereValues = Object.values(where);
+
+  // Construct the final SQL query
+  const updateQuery = `UPDATE ?? SET ? WHERE ${whereConditions}`;
+
+  db.query(updateQuery, [table, updatedFields, ...whereValues], (error, result) => {
+      if (error) {
+          console.error("Error updating data:", error); // Check this log for any SQL or query errors
+          return res.status(500).json({ success: false, message: 'Error updating data', error });
+      }
+
+      if (result.affectedRows > 0) {
+          res.status(200).json({ success: true, message: 'Data updated successfully' });
+      } else {
+          res.status(404).json({ success: false, message: 'Data not found' });
+      }
   });
 };
 

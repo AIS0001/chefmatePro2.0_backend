@@ -61,10 +61,11 @@ const insertdatabulk = (req, res) => {
     item.item_name,
     item.quantity,
     item.total_amount,
+    item.status,
   ]);
 
   // Bulk insert query
-  const query = `INSERT INTO ${tableName} (order_id,  item_name, quantity, total_price) VALUES ?`;
+  const query = `INSERT INTO ${tableName} (order_id,  item_name, quantity, total_price,status) VALUES ?`;
 
   // Log the query and its values for debugging
   console.log('Executing query:', query);

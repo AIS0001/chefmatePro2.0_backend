@@ -144,7 +144,7 @@ const fetchData = (req, res) => {
   //console.log('Constructed Query:', query);
 
   const formattedQuery = db.format(query, queryParams);
- // console.log('Formatted Query:', formattedQuery);
+  console.log('Formatted Query:', formattedQuery);
 
   // Execute the query
   db.query(formattedQuery, (error, results) => {
@@ -245,6 +245,54 @@ db.query(query, [val1], (err, results) => {
 
 });
 }
+const getOrderDetailsWithSubtotals = (req, res) => {
+  const table1 = req.params.table1 || "orders"; // Default table names
+  const table2 = req.params.table2 || "order_items"; // Default table names
+  const tableNumber = req.query.tableNumber;  // Filter based on table number
+  const status = 1; // Filter where status is 1 (active)
+
+  // Build the SQL query dynamically based on the table number and status
+  let query = `
+    SELECT 
+      o.order_number,
+      oi.item_name as item_name,
+      oi.quantity as qty,
+      oi.total_price AS rate,
+      (oi.quantity * oi.total_price) AS subtotal
+    FROM 
+      ${table1} o
+    JOIN 
+      ${table2} oi
+    ON 
+      o.id = oi.order_id
+    WHERE 
+      o.status = ?`;
+
+  // Add the table number filter if provided
+  if (tableNumber) {
+    query += ` AND o.table_number = ?`;
+  }
+
+  const queryParams = [status]; // Start with status as a query parameter
+  if (tableNumber) {
+    queryParams.push(tableNumber); // Add table number to parameters if it's provided
+  }
+
+  // Execute the query with dynamic parameters
+  db.query(query, queryParams, (err, results) => {
+    if (err) {
+      console.error("Error fetching order details:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+      return;
+    }
+
+    res.json({ data: results });
+
+    console.log("Order Details with Subtotals:", results);
+  });
+};
+
+
 
 module.exports = {
   getMaxOrderNumber,
@@ -256,5 +304,6 @@ module.exports = {
   combolistwithWhere,
   fetchDataFromTwoTables,
   getRunningTable,
+  getOrderDetailsWithSubtotals,
 
 }
