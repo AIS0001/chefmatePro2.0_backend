@@ -26,8 +26,9 @@ const insertdata = (req, res) => {
         })
       }
       else{
-        // result.insertId typically contains the auto-incremented ID of the newly inserted record
-        const insertedId = result.insertId; // Get the inserted record's ID
+         // Retrieve the last inserted ID correctly
+    const insertedId = result.insertId; // Use result.insertId to get the inserted record's ID
+console.log(insertedId);
         return res.status(200).send({
             msg: 'Data saved successfully',
             id: insertedId,  // Return the newly inserted ID or any relevant data
@@ -58,6 +59,7 @@ const insertdatabulk = (req, res) => {
 
   const values = items.map(item => [
     item.order_number,
+    item.table_number,
     item.item_name,
     item.quantity,
     item.total_amount,
@@ -65,7 +67,7 @@ const insertdatabulk = (req, res) => {
   ]);
 
   // Bulk insert query
-  const query = `INSERT INTO ${tableName} (order_id,  item_name, quantity, total_price,status) VALUES ?`;
+  const query = `INSERT INTO ${tableName} (order_id, table_number, item_name, quantity, total_price,status) VALUES ?`;
 
   // Log the query and its values for debugging
   console.log('Executing query:', query);

@@ -144,7 +144,7 @@ const fetchData = (req, res) => {
   //console.log('Constructed Query:', query);
 
   const formattedQuery = db.format(query, queryParams);
-  console.log('Formatted Query:', formattedQuery);
+  //console.log('Formatted Query:', formattedQuery);
 
   // Execute the query
   db.query(formattedQuery, (error, results) => {
@@ -255,8 +255,8 @@ const getOrderDetailsWithSubtotals = (req, res) => {
   let query = `
     SELECT 
       o.order_number,
-      oi.item_name as item_name,
-      oi.quantity as qty,
+      oi.item_name AS item_name,
+      oi.quantity AS qty,
       oi.total_price AS rate,
       (oi.quantity * oi.total_price) AS subtotal
     FROM 
@@ -277,7 +277,8 @@ const getOrderDetailsWithSubtotals = (req, res) => {
   if (tableNumber) {
     queryParams.push(tableNumber); // Add table number to parameters if it's provided
   }
-
+  const formattedQuery = db.format(query, queryParams);
+  console.log('Formatted Query:', formattedQuery);
   // Execute the query with dynamic parameters
   db.query(query, queryParams, (err, results) => {
     if (err) {
