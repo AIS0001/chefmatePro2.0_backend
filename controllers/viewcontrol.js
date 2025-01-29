@@ -204,7 +204,7 @@ db.query(query, [val1], (err, results) => {
   }
   res.json({ data: newOrderNumber });
 
-  console.log(`New order number for user ${col1} is: ${newOrderNumber}`);
+ // console.log(`New order number for user ${col1} is: ${newOrderNumber}`);
 
 });
 };

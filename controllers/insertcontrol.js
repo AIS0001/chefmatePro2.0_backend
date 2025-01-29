@@ -16,7 +16,7 @@ const insertdata = (req, res) => {
 
 
   let setty = `INSERT INTO ${table} (${keyval}) values (${val2})`
-  console.log(setty)
+  //console.log(setty)
   db.query(
     `INSERT INTO ${table} (${keyval}) values (${val2})`,
     (err, result) => {
@@ -28,7 +28,7 @@ const insertdata = (req, res) => {
       else{
          // Retrieve the last inserted ID correctly
     const insertedId = result.insertId; // Use result.insertId to get the inserted record's ID
-console.log(insertedId);
+//console.log(insertedId);
         return res.status(200).send({
             msg: 'Data saved successfully',
             id: insertedId,  // Return the newly inserted ID or any relevant data
@@ -70,8 +70,8 @@ const insertdatabulk = (req, res) => {
   const query = `INSERT INTO ${tableName} (order_id, table_number, item_name, quantity, total_price,status) VALUES ?`;
 
   // Log the query and its values for debugging
-  console.log('Executing query:', query);
-  console.log('With values:', values);
+  //console.log('Executing query:', query);
+  //console.log('With values:', values);
 
   db.query(query, [values], (err, results) => {
     if (err) {
@@ -99,7 +99,7 @@ const addNewProduct = (req, res) => {
     
   ]);
   const query = `INSERT INTO ${tbl} (product_id,filename, path, mimetype, size) VALUES ?`;
-  console.log(query);
+  //console.log(query);
   db.query(query, [files], (err, results) => {
     if (err) {
       console.error('Failed to insert images into database:', err);

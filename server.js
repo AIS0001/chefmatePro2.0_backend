@@ -21,6 +21,9 @@ const express = require("express");
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const userRouters = require('./routes/userRoutes.js');
+const printRouters = require('./routes/printRoutes.js');
+// Use Print Routes
+
 
 require('./config/dbconnection');
 
@@ -33,6 +36,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
 
 app.use('/api', userRouters);
+app.use('/api', printRouters);
 
 //error handling
 app.use((err, req, res, next) => {
