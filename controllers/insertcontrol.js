@@ -39,6 +39,81 @@ const insertdata = (req, res) => {
     }
   )
 }
+const savebill = async (req, res) => {
+  // Get DB connection
+  const connection = await db.getConnection(); // Get DB connection
+
+  // Start transaction
+  await connection.beginTransaction();
+
+  try {
+    const { customer_id, subtotal, tax, discount_type, discount_value, roundoff, payment_mode } = req.body;
+
+    // Calculate discount amount
+    let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
+    let net_total = subtotal + tax - discount_amount + roundoff;
+
+    // 1️⃣ Insert Bill into `final_bill`
+    const billQuery = `
+      INSERT INTO final_bill (customer_id, inv_date, inv_time, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode)
+      VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    console.log('Executing Query:', billQuery); // Log the query
+    const [billResult] = await connection.execute(
+      billQuery,
+      [customer_id, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode]
+    );
+
+    const bill_id = billResult.insertId; // Get new bill ID
+
+    // 2️⃣ Create Ledger Entries
+    let ledgerEntries = [];
+
+    // Sales Entry (Credit)
+    ledgerEntries.push(["Sales Account", "credit", net_total, bill_id]);
+
+    // Payment Entries Based on Payment Mode
+    if (payment_mode === "Cash") {
+      ledgerEntries.push(["Cash Account", "debit", net_total, bill_id]);
+    } else if (payment_mode === "Credit") {
+      ledgerEntries.push(["Accounts Receivable", "debit", net_total, bill_id]);
+    }
+
+    // Discount Entry (Debit)
+    if (discount_amount > 0) {
+      ledgerEntries.push(["Discount Given", "debit", discount_amount, bill_id]);
+    }
+
+    // Round-Off Entry
+    if (roundoff !== 0) {
+      ledgerEntries.push(["Round Off", roundoff > 0 ? "debit" : "credit", Math.abs(roundoff), bill_id]);
+    }
+
+    // Insert into `ledger_entries`
+    const ledgerQuery = `
+      INSERT INTO ledger_entries (account_name, entry_type, amount, reference_id) VALUES ?
+    `;
+    console.log('Executing Ledger Query:', ledgerQuery); // Log the ledger query
+    console.log('Ledger Data:', ledgerEntries); // Log the data being inserted
+    await connection.query(ledgerQuery, [ledgerEntries]);
+
+    // Commit transaction
+    await connection.commit(); // Commit transaction
+    res.status(201).json({ success: true, message: "Bill & Ledger saved successfully!", bill_id });
+
+  } catch (error) {
+    // Rollback transaction on error
+    await connection.rollback();
+    console.error("Error saving bill:", error);
+    res.status(500).json({ success: false, message: "Error saving bill", error });
+  } finally {
+    // Release connection
+    connection.release(); // Release connection
+  }
+};
+
+
+
 
 
 const insertdatabulk = (req, res) => {
@@ -141,6 +216,7 @@ const uploadcsv = (req, res) => {
 module.exports = {
   
   insertdata,
+  savebill,
   insertdatabulk,
   addNewProduct,
   uploadcsv,

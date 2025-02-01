@@ -223,7 +223,7 @@ db.query(query, (err, results) => {
 
   res.json({ data: results });
 
-  console.log(`Running table List: `);
+  //console.log(`Running table List: `);
 
 });
 }
@@ -278,7 +278,7 @@ const getOrderDetailsWithSubtotals = (req, res) => {
     queryParams.push(tableNumber); // Add table number to parameters if it's provided
   }
   const formattedQuery = db.format(query, queryParams);
-  console.log('Formatted Query:', formattedQuery);
+  //console.log('Formatted Query:', formattedQuery);
   // Execute the query with dynamic parameters
   db.query(query, queryParams, (err, results) => {
     if (err) {
@@ -289,7 +289,7 @@ const getOrderDetailsWithSubtotals = (req, res) => {
 
     res.json({ data: results });
 
-    console.log("Order Details with Subtotals:", results);
+    //console.log("Order Details with Subtotals:", results);
   });
 };
 
