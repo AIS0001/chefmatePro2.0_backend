@@ -1,16 +1,17 @@
 DB_PASSWORD='Realforce@123'
-const { DB_HOST, DB_USERNAME, DB_NAME } = process.env;
+const{DB_HOST,DB_USERNAME,DB_NAME }=process.env;
 
-const mysql = require('mysql2'); // Use mysql2 for better connection management
+var mysql = require('mysql');
+ var conn = mysql.createConnection({
+    host:DB_HOST,
+    user:DB_USERNAME,
+    password:DB_PASSWORD,
+    database:DB_NAME,
+    dateStrings: true
+ });
+ conn.connect( function(err){
+    if(err) throw err;
+    console.log(DB_NAME+' Database Connected db connection1');
 
-// Create a pool with the necessary parameters
-const pool = mysql.createPool({
-  host: DB_HOST,
-  user: DB_USERNAME,
-  password: DB_PASSWORD,
-  database: DB_NAME,
-  dateStrings: true,
-});
-
-// Export the promise-based pool to handle connections and transactions
-module.exports = pool.promise();
+ });
+ module.exports = conn;

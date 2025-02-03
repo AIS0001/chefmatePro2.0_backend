@@ -4,6 +4,7 @@ const {signupvalidation,loginValidation}  = require('../helpers/validation');
 const usercontroller = require('../controllers/userControl');
 const auth = require('../middleware/auth');
 const  insertcontroller = require("../controllers/insertcontrol");
+const  savebillController = require("../controllers/billControl");
 const  deletecontroller = require("../controllers/deletecontrol");
 const  viewcontroller = require("../controllers/viewcontrol");
 const  updatecontroller = require("../controllers/updatecontrol");
@@ -32,7 +33,7 @@ router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 
 //Insert Data 
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
-router.post('/savebill',auth.isAuthorize,insertcontroller.savebill);
+router.post('/savebill',auth.isAuthorize,savebillController.savebill);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
 router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
 
