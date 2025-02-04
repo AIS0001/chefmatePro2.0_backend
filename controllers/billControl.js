@@ -14,7 +14,7 @@ const savebill = async (req, res) => {
     try {
       await connection.beginTransaction(); // Start transaction
   
-      const { customer_id, tablenumber,subtotal, tax, discount_type, discount_value, round_off, payment_mode } = req.body;
+      const { customer_id, tablenumber,subtotal,subtotal_afterdiscount, tax, discount_type, discount_value, round_off,grand_total, payment_mode } = req.body;
   
       // Calculate discount amount
       let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
@@ -22,7 +22,7 @@ const savebill = async (req, res) => {
   
       // Insert Bill into `final_bill`
       const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, tax, discount_type, discount_value, discount_amount, roundoff, grand_total, payment_mode)
+        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode)
         VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
   
@@ -30,7 +30,7 @@ const savebill = async (req, res) => {
   
       const [billResult] = await connection.execute(
         billQuery,
-        [customer_id,tablenumber, subtotal, tax, discount_type, discount_value, discount_amount, round_off, net_total, payment_mode]
+        [customer_id,tablenumber, subtotal,  discount_type, discount_value, subtotal_afterdiscount,tax,round_off, grand_total, payment_mode]
       );
   
       const bill_id = billResult.insertId; // Get the final bill ID
@@ -52,7 +52,7 @@ const savebill = async (req, res) => {
         [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sales`, 0.00, net_total, bill_id]
       ];
   
-      if (payment_mode === "Cash" || payment_mode === "Bank Transfer" || payment_mode === "QR Code" || payment_mode === "UPI" ) {
+      if (payment_mode === "Cash" ) {
         ledgerEntries.push([transaction_id, new Date(), "Cash", cash_account_id, `Bill #${bill_id} - Cash Payment`, net_total, 0.00, bill_id]);
       } 
       else if (payment_mode === "Bank Transfer") {
@@ -64,6 +64,9 @@ const savebill = async (req, res) => {
       else if (payment_mode === "UPI") {
         ledgerEntries.push([transaction_id, new Date(), "UPI", cash_account_id, `Bill #${bill_id} - UPI Payment`, net_total, 0.00, bill_id]);
     }
+    else if (payment_mode === "Credit") {
+      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", receivable_account_id, `Bill #${bill_id} - Credit Sale`, net_total, 0.00, bill_id]);
+  }
   
       if (discount_amount > 0) {
         ledgerEntries.push([transaction_id, new Date(), "Discount", discount_account_id, `Bill #${bill_id} - Discount Given`, discount_amount, 0.00, bill_id]);
