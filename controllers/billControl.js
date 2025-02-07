@@ -49,44 +49,46 @@ const savebill = async (req, res) => {
   
       // Create Ledger Entries
       let ledgerEntries = [
-        [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sales`, 0.00, net_total, bill_id]
+        [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sale Revenue`, 0.00, grand_total, "NULL"]
       ];
   
       if (payment_mode === "Cash" ) {
-        ledgerEntries.push([transaction_id, new Date(), "Cash", cash_account_id, `Bill #${bill_id} - Cash Payment`, net_total, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "Cash", "NULL", `Bill #${bill_id} - Cash Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
       } 
       else if (payment_mode === "Bank Transfer") {
-        ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", cash_account_id, `Bill #${bill_id} - Bank Transfer Payment`, net_total, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", "NULL", `Bill #${bill_id} - Bank Transfer Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
     }
       else if (payment_mode === "QR Code") {
-        ledgerEntries.push([transaction_id, new Date(), "QR Code", cash_account_id, `Bill #${bill_id} - QR Payment`, net_total, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "QR Code", "NULL", `Bill #${bill_id} - QR Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
     }
       else if (payment_mode === "UPI") {
-        ledgerEntries.push([transaction_id, new Date(), "UPI", cash_account_id, `Bill #${bill_id} - UPI Payment`, net_total, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "UPI", "NULL", `Bill #${bill_id} - UPI Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
     }
     else if (payment_mode === "Credit") {
-      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", receivable_account_id, `Bill #${bill_id} - Credit Sale`, net_total, 0.00, bill_id]);
+      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, subtotal_afterdiscount, 0.00, "NULL"]);
   }
   
       if (discount_amount > 0) {
-        ledgerEntries.push([transaction_id, new Date(), "Discount", discount_account_id, `Bill #${bill_id} - Discount Given`, discount_amount, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "Discount", customer_id, `Bill #${bill_id} - Discount Given`, discount_amount, 0.00, bill_id]);
       }
-  
-      if (round_off !== 0) {
-        ledgerEntries.push([
-          transaction_id, 
-          new Date(), 
-          "Round Off", 
-          roundoff_account_id, 
-          `Bill #${bill_id} - Round Off`, 
-          round_off > 0 ? round_off : 0.00, 
-          round_off < 0 ? Math.abs(round_off) : 0.00, 
-          bill_id
-        ]);
-      }
+     // Round-Off Adjustment
+   
+    if (round_off !== 0) {
+      ledgerEntries.push([
+        transaction_id, // Ensure transaction_id is assigned
+        new Date(),               // Timestamp
+        "Round-Off",              // Account Type
+        roundoff_account_id || 999, // Assign a default account ID if missing
+        `Bill #${bill_id} - Round-Off Adjustment`, // Description
+        round_off > 0 ? round_off : 0.00,         // Debit amount if positive
+        round_off < 0 ? Math.abs(round_off) : 0.00, // Credit amount if negative
+        bill_id               // Reference ID linking to invoice
+      ]);
+    }
+    
   
       if (tax > 0) {
-        ledgerEntries.push([transaction_id, new Date(), "Tax", tax_account_id, `Bill #${bill_id} - Tax`, tax, 0.00, bill_id]);
+        ledgerEntries.push([transaction_id, new Date(), "Tax", customer_id, `Bill #${bill_id} - Tax`, tax, 0.00, bill_id]);
       }
   
       // Insert into `ledger_entries`
@@ -95,7 +97,7 @@ const savebill = async (req, res) => {
         VALUES ?
       `;
   
-      console.log('Executing Ledger Query:', ledgerQuery);
+      //console.log('Executing Ledger Query:', ledgerQuery);
       
       await connection.query(ledgerQuery, [ledgerEntries]);
   
@@ -183,16 +185,16 @@ const updateBill = async (req, res) => {
     const { subtotal, tax, discount_type, discount_value, roundoff, payment_mode } = req.body;
 
     let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
-    let net_total = subtotal + tax - discount_amount + round_off;
+    let grand_total = subtotal + tax - discount_amount + round_off;
 
     // Update Bill
     const updateQuery = `
       UPDATE final_bill 
-      SET subtotal = ?, tax = ?, discount_type = ?, discount_value = ?, discount_amount = ?, round_off = ?, net_total = ?, payment_mode = ? 
+      SET subtotal = ?, tax = ?, discount_type = ?, discount_value = ?, discount_amount = ?, round_off = ?, grand_total = ?, payment_mode = ? 
       WHERE id = ?
     `;
     const [result] = await connection.execute(updateQuery, [
-      subtotal, tax, discount_type, discount_value, discount_amount, round_off, net_total, payment_mode, id
+      subtotal, tax, discount_type, discount_value, discount_amount, round_off, grand_total, payment_mode, id
     ]);
 
     if (result.affectedRows === 0) {
