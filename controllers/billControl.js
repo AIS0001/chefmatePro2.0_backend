@@ -14,7 +14,7 @@ const savebill = async (req, res) => {
     try {
       await connection.beginTransaction(); // Start transaction
   
-      const { customer_id, tablenumber,subtotal,subtotal_afterdiscount, tax, discount_type, discount_value, round_off,grand_total, payment_mode } = req.body;
+      const { customer_id, tablenumber,subtotal,subtotal_afterdiscount, tax, discount_type, discount_value, round_off,grand_total, payment_mode,status } = req.body;
   
       // Calculate discount amount
       let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
@@ -22,15 +22,15 @@ const savebill = async (req, res) => {
   
       // Insert Bill into `final_bill`
       const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode)
-        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status)
+        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
       `;
   
       console.log('Executing Query:', billQuery);
   
       const [billResult] = await connection.execute(
         billQuery,
-        [customer_id,tablenumber, subtotal,  discount_type, discount_value, subtotal_afterdiscount,tax,round_off, grand_total, payment_mode]
+        [customer_id,tablenumber, subtotal,  discount_type, discount_value, subtotal_afterdiscount,tax,round_off, grand_total, payment_mode,status]
       );
   
       const bill_id = billResult.insertId; // Get the final bill ID
@@ -213,5 +213,107 @@ const updateBill = async (req, res) => {
     connection.release();
   }
 };
+const savePayment = async (req, res) => {
+  const connection = await db.getConnection();
+  await connection.beginTransaction();
 
-module.exports = { savebill, getBills, getBillById, deleteBill, updateBill };
+  try {
+    const { customer_id, amount_paid, payment_mode } = req.body;
+    let remaining_amount = amount_paid;
+
+    // Fetch unpaid invoices (oldest first)
+    const [invoices] = await connection.execute(`
+      SELECT id, grand_total, paid_amount FROM final_bill 
+      WHERE customer_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
+      ORDER BY inv_date ASC;
+    `, [customer_id]);
+
+    if (invoices.length === 0) {
+      return res.status(400).json({ success: false, message: "No outstanding invoices." });
+    }
+
+    let payments = [];
+
+    for (let invoice of invoices) {
+      if (remaining_amount <= 0) break;
+
+      let due_amount = invoice.grand_total - invoice.paid_amount;
+      let payment_to_apply = Math.min(due_amount, remaining_amount);
+      remaining_amount -= payment_to_apply;
+
+      let new_status = (invoice.paid_amount + payment_to_apply) >= invoice.grand_total ? "Paid" : "Partially Paid";
+
+      // ✅ Update `paid_amount` instead of `grand_total`
+      await connection.execute(`
+        UPDATE final_bill 
+        SET paid_amount = paid_amount + ?, status = ? 
+        WHERE id = ?;
+      `, [payment_to_apply, new_status, invoice.id]);
+
+      // ✅ Insert Ledger Entries
+      payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
+      payments.push([invoice.id, new Date(), "Accounts Receivable", customer_id, "Payment Received", 0.00, payment_to_apply]);
+    }
+
+    // Insert into `ledger_entries`
+    await connection.query(`
+      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+    `, [payments]);
+
+    await connection.commit();
+    res.status(201).json({ success: true, message: "Payment recorded successfully!" });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error processing payment:", error);
+    res.status(500).json({ success: false, message: "Payment processing failed", error });
+  } finally {
+    connection.release();
+  }
+};
+
+
+const getOutstandingBalance = async (req, res) => {
+  try {
+    const { customer_id } = req.params;
+
+    const query = `
+      SELECT 
+        SUM(debit_amount) - SUM(credit_amount) AS outstanding_balance
+      FROM ledger_entries
+      WHERE account_type = 'Accounts Receivable' 
+      AND account_id = ?;
+    `;
+
+    const [result] = await db.execute(query, [customer_id]);
+    const outstanding_balance = result[0]?.outstanding_balance || 0;
+
+    res.status(200).json({ success: true, outstanding_balance });
+
+  } catch (error) {
+    console.error("Error fetching outstanding balance:", error);
+    res.status(500).json({ success: false, message: "Error fetching balance", error });
+  }
+};
+const getCustomerInvoices = async (req, res) => {
+  try {
+      const { customer_id } = req.params;
+
+      // Fetch all unpaid invoices for the customer
+      const query = `
+          SELECT id,  net_total, status
+          FROM final_bill
+          WHERE customer_id = ? AND status = '1'
+          ORDER BY inv_date DESC;
+      `;
+
+      const [invoices] = await db.execute(query, [customer_id]);
+
+      res.status(200).json({ success: true, invoices });
+
+  } catch (error) {
+      console.error("Error fetching customer invoices:", error);
+      res.status(500).json({ success: false, message: "Error fetching invoices", error });
+  }
+};
+module.exports = { savebill, getBills, getBillById, deleteBill, updateBill,savePayment,getOutstandingBalance,getCustomerInvoices};

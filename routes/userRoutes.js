@@ -4,6 +4,7 @@ const {signupvalidation,loginValidation}  = require('../helpers/validation');
 const usercontroller = require('../controllers/userControl');
 const auth = require('../middleware/auth');
 const  insertcontroller = require("../controllers/insertcontrol");
+const  billcontroller = require("../controllers/billControl");
 const  savebillController = require("../controllers/billControl");
 const  deletecontroller = require("../controllers/deletecontrol");
 const  viewcontroller = require("../controllers/viewcontrol");
@@ -38,11 +39,14 @@ router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.inser
 router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
 
 //View
+
 router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);
 router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.viewAllData);
 router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolist);
 router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolistwithWhere);
 router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAuthorize,viewcontroller.fetchDataFromTwoTables);
+
+router.get('/getOutstandingBalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
 
 //Get
 router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);
