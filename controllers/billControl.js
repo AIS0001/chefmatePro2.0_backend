@@ -22,15 +22,15 @@ const savebill = async (req, res) => {
   
       // Insert Bill into `final_bill`
       const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status)
-        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status)
+        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
       `;
   
-      console.log('Executing Query:', billQuery);
+      //console.log('Executing Query:', billQuery);
   
       const [billResult] = await connection.execute(
         billQuery,
-        [customer_id,tablenumber, subtotal,  discount_type, discount_value, subtotal_afterdiscount,tax,round_off, grand_total, payment_mode,status]
+        [customer_id,tablenumber, subtotal,  discount_type, discount_value,discount_amount, subtotal_afterdiscount,tax,round_off, grand_total, payment_mode,status]
       );
   
       const bill_id = billResult.insertId; // Get the final bill ID
@@ -53,43 +53,43 @@ const savebill = async (req, res) => {
       ];
   
       if (payment_mode === "Cash" ) {
-        ledgerEntries.push([transaction_id, new Date(), "Cash", "NULL", `Bill #${bill_id} - Cash Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
+        ledgerEntries.push([transaction_id, new Date(), "Cash", "NULL", `Bill #${bill_id} - Cash Payment`, grand_total, 0.00, "NULL"]);
       } 
       else if (payment_mode === "Bank Transfer") {
-        ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", "NULL", `Bill #${bill_id} - Bank Transfer Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
+        ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", "NULL", `Bill #${bill_id} - Bank Transfer Payment`, grand_total, 0.00, "NULL"]);
     }
       else if (payment_mode === "QR Code") {
-        ledgerEntries.push([transaction_id, new Date(), "QR Code", "NULL", `Bill #${bill_id} - QR Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
+        ledgerEntries.push([transaction_id, new Date(), "QR Code", "NULL", `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
     }
       else if (payment_mode === "UPI") {
-        ledgerEntries.push([transaction_id, new Date(), "UPI", "NULL", `Bill #${bill_id} - UPI Payment`, subtotal_afterdiscount, 0.00, "NULL"]);
+        ledgerEntries.push([transaction_id, new Date(), "UPI", "NULL", `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Credit") {
-      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, subtotal_afterdiscount, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, "NULL"]);
   }
   
-      if (discount_amount > 0) {
-        ledgerEntries.push([transaction_id, new Date(), "Discount", customer_id, `Bill #${bill_id} - Discount Given`, discount_amount, 0.00, bill_id]);
-      }
+      // if (discount_amount > 0) {
+      //   ledgerEntries.push([transaction_id, new Date(), "Discount", customer_id, `Bill #${bill_id} - Discount Given`, discount_amount, 0.00, bill_id]);
+      // }
      // Round-Off Adjustment
    
-    if (round_off !== 0) {
-      ledgerEntries.push([
-        transaction_id, // Ensure transaction_id is assigned
-        new Date(),               // Timestamp
-        "Round-Off",              // Account Type
-        roundoff_account_id || 999, // Assign a default account ID if missing
-        `Bill #${bill_id} - Round-Off Adjustment`, // Description
-        round_off > 0 ? round_off : 0.00,         // Debit amount if positive
-        round_off < 0 ? Math.abs(round_off) : 0.00, // Credit amount if negative
-        bill_id               // Reference ID linking to invoice
-      ]);
-    }
+    // if (round_off !== 0) {
+    //   ledgerEntries.push([
+    //     transaction_id, // Ensure transaction_id is assigned
+    //     new Date(),               // Timestamp
+    //     "Round-Off",              // Account Type
+    //     customer_id || "NULL", // Assign a default account ID if missing
+    //     `Bill #${bill_id} - Round-Off Adjustment`, // Description
+    //     round_off > 0 ? round_off : 0.00,         // Debit amount if positive
+    //     round_off < 0 ? Math.abs(round_off) : 0.00, // Credit amount if negative
+    //     bill_id               // Reference ID linking to invoice
+    //   ]);
+    // }
     
   
-      if (tax > 0) {
-        ledgerEntries.push([transaction_id, new Date(), "Tax", customer_id, `Bill #${bill_id} - Tax`, tax, 0.00, bill_id]);
-      }
+      // if (tax > 0) {
+      //   ledgerEntries.push([transaction_id, new Date(), "Tax", customer_id, `Bill #${bill_id} - Tax`, tax, 0.00, bill_id]);
+      // }
   
       // Insert into `ledger_entries`
       const ledgerQuery = `
@@ -281,13 +281,14 @@ const getOutstandingBalance = async (req, res) => {
       SELECT 
         SUM(debit_amount) - SUM(credit_amount) AS outstanding_balance
       FROM ledger_entries
-      WHERE account_type = 'Accounts Receivable' 
+      WHERE account_type = 'Account Recievable' 
       AND account_id = ?;
     `;
-
+   // console.log(query);
+    //console.log(customer_id);
     const [result] = await db.execute(query, [customer_id]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
-
+    console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
 
   } catch (error) {

@@ -144,7 +144,7 @@ const fetchData = (req, res) => {
   //console.log('Constructed Query:', query);
 
   const formattedQuery = db.format(query, queryParams);
-  //console.log('Formatted Query:', formattedQuery);
+  console.log('Formatted Query:', formattedQuery);
 
   // Execute the query
   db.query(formattedQuery, (error, results) => {

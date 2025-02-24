@@ -46,7 +46,7 @@ router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.comb
 router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolistwithWhere);
 router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAuthorize,viewcontroller.fetchDataFromTwoTables);
 
-router.get('/getOutstandingBalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
+router.get('/getoutstandingbalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
 
 //Get
 router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);

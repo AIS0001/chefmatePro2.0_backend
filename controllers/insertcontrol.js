@@ -47,23 +47,24 @@ const savebill = async (req, res) => {
   await connection.beginTransaction();
 
   try {
-    const { customer_id, subtotal, tax, discount_type, discount_value, roundoff, payment_mode } = req.body;
+    const { customer_id, subtotal, tax, discount_type, discount_value,discount_amount, roundoff, payment_mode } = req.body;
 
     // Calculate discount amount
-    let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
-    let net_total = subtotal + tax - discount_amount + roundoff;
+    let discount_amounts = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
+    let net_total = subtotal + tax - discount_amounts + roundoff;
 
     // 1️⃣ Insert Bill into `final_bill`
     const billQuery = `
       INSERT INTO final_bill (customer_id, inv_date, inv_time, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode)
       VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    console.log('Executing Query:', billQuery); // Log the query
+    //console.log('Executing Query:', billQuery); // Log the query
     const [billResult] = await connection.execute(
       billQuery,
       [customer_id, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode]
     );
-
+    console.log(discount_amounts);
+    console.log(discount_amount);
     const bill_id = billResult.insertId; // Get new bill ID
 
     // 2️⃣ Create Ledger Entries
