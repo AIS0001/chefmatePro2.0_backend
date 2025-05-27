@@ -430,7 +430,7 @@ const getOutstandingBalance = async (req, res) => {
     //console.log(customer_id);
     const [result] = await db.execute(query, [customer_id]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
-    console.log(outstanding_balance);
+    //console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
 
   } catch (error) {
