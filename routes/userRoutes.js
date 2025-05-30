@@ -48,6 +48,7 @@ router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontro
 router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAuthorize,viewcontroller.fetchDataFromTwoTables);
 
 router.get('/getoutstandingbalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
+router.get('/getclosingstock/:item_id', auth.isAuthorize, viewcontroller.getInventoryClosingStock);
 
 //Get
 router.get('/getmaxordernumber/:tbl/:col1/:val1/:field',auth.isAuthorize,viewcontroller.getMaxOrderNumber);

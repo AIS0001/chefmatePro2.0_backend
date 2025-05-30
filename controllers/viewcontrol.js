@@ -292,7 +292,20 @@ const getOrderDetailsWithSubtotals = (req, res) => {
     //console.log("Order Details with Subtotals:", results);
   });
 };
-
+const getInventoryClosingStock = async (req, res) => {
+  const { item_id } = req.params;
+  console.log(item_id);
+  try {
+    const [result] = await db.query(
+      `SELECT closing_stock FROM inventory WHERE item_id = ? ORDER BY id DESC LIMIT 1`,
+      [item_id]
+    );
+    res.json(result[0] || { closing_stock: 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch closing stock" });
+  }
+};
 
 
 module.exports = {
@@ -306,5 +319,6 @@ module.exports = {
   fetchDataFromTwoTables,
   getRunningTable,
   getOrderDetailsWithSubtotals,
+  getInventoryClosingStock
 
 }

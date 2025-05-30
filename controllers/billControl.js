@@ -415,6 +415,10 @@ const savePayment = async (req, res) => {
     connection.release();
   }
 };
+
+
+
+
 const getOutstandingBalance = async (req, res) => {
   try {
     const { customer_id } = req.params;
