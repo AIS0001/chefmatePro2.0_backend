@@ -292,20 +292,45 @@ const getOrderDetailsWithSubtotals = (req, res) => {
     //console.log("Order Details with Subtotals:", results);
   });
 };
-const getInventoryClosingStock = async (req, res) => {
+const getInventoryClosingStock = (req, res) => {
   const { item_id } = req.params;
-  console.log(item_id);
-  try {
-    const [result] = await db.query(
-      `SELECT closing_stock FROM inventory WHERE item_id = ? ORDER BY id DESC LIMIT 1`,
-      [item_id]
-    );
-    res.json(result[0] || { closing_stock: 0 });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch closing stock" });
-  }
+  const query = `SELECT closing_stock FROM inventory WHERE item_id = ? ORDER BY id DESC LIMIT 1`;
+  //console.log("Running SQL:", query.replace("?", `'${item_id}'`));
+
+  db.query(query, [item_id], (err, rows) => {
+    if (err) {
+      console.error("DB Error:", err);
+      return res.status(500).json({ error: "Failed to fetch closing stock" });
+    }
+
+    //console.log("Query result:", rows);
+    res.json(rows[0] || { closing_stock: 0 });
+  });
 };
+
+
+// viewcontroller.js
+const getInventoryWithItems = (req, res) => {
+  const query = `
+    SELECT 
+      inventory.*, 
+      items.iname AS item_name
+    FROM 
+      inventory 
+    JOIN 
+      items ON inventory.item_id = items.id
+    ORDER BY inventory.id DESC
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("JOIN query error:", err);
+      return res.status(500).json({ error: "Failed to fetch joined inventory data" });
+    }
+    res.json(results); // ✅ Directly return results from callback
+  });
+};
+
 
 
 module.exports = {
@@ -319,6 +344,7 @@ module.exports = {
   fetchDataFromTwoTables,
   getRunningTable,
   getOrderDetailsWithSubtotals,
-  getInventoryClosingStock
+  getInventoryClosingStock,
+  getInventoryWithItems,
 
 }
