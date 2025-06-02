@@ -4,123 +4,70 @@ const db = require('../config/dbconnection')
 const jwt = require('jsonwebtoken')
 const { jwt_secret } = process.env
 
-const countRecord = (req, res) => {
-    const authToken = req.headers.authorization.split(' ')[1]
-    const decode = jwt.verify(authToken, jwt_secret)
-    const table = [req.params.tablename]
-    const id = [req.params.orderby]
-    console.log(`SELECT count(*) as totalrecord FROM ${table} `);
-    db.query(
-      `SELECT count(*) as totalrecord FROM ${table} `,
-      function (err, result, fields) {
-        if (err) {
-          console.log('Invalid field ' + err)
-          return
-        } else {
-          var value = JSON.parse(JSON.stringify(result))
-          return res
-            .status(200)
-            .send({ success: true, data: value, message: 'Data fetched !!' })
-        }
+const getSales = (req, res) => {
+  const authToken = req.headers.authorization.split(" ")[1];
+  const query = `
+    SELECT DATE(inv_date) as date, SUM(grand_total) as amount
+    FROM final_bill
+    GROUP BY DATE(inv_date)
+    ORDER BY date
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error fetching sales data:", err);
+      return res.status(500).json({ error: "Failed to fetch sales data" });
+    }
+    res.json(results);
+  });
+};
+
+
+const getPurchase  = (req, res) => {
+   const query = `
+    SELECT DATE(created_at) as date, SUM(netAmount) as amount
+    FROM inventory
+    GROUP BY DATE(created_at)
+    ORDER BY date
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error fetching purchase data:", err);
+      return res.status(500).json({ error: "Failed to fetch purchase data" });
+    }
+    res.json(results);
+  });
+};
+const getSummary  = (req, res) => {
+ const salesQuery = `SELECT SUM(grand_total) AS totalSales FROM final_bill`;
+  const purchaseQuery = `SELECT SUM(netAmount) AS totalPurchase FROM inventory`;
+
+  db.query(salesQuery, (err, salesResult) => {
+    if (err) {
+      console.error("Error fetching sales summary:", err);
+      return res.status(500).json({ error: "Failed to fetch summary" });
+    }
+
+    db.query(purchaseQuery, (err, purchaseResult) => {
+      if (err) {
+        console.error("Error fetching purchase summary:", err);
+        return res.status(500).json({ error: "Failed to fetch summary" });
       }
-    )
-  }
-  const todayRecord = (req, res) => {
-    const authToken = req.headers.authorization.split(' ')[1]
-    const decode = jwt.verify(authToken, jwt_secret)
-    const table = [req.params.tablename]
-    const col1 = [req.params.col1]
-    const val1 = [req.params.val1]
-    const para1 = [req.params.para1]
-    const id = [req.params.orderby]
-    console.log(`SELECT IFNULL(sum(${para1}),0) as totalrecord FROM ${table} where ${col1}='${val1}'   `);
-    db.query(
-      `SELECT ROUND(IFNULL(sum(${para1}),0),2) as totalrecord FROM ${table} where ${col1}='${val1}' `,
-      function (err, result, fields) {
-        if (err) {
-          console.log('Invalid field ' + err)
-          return
-        } else {
-          var value = JSON.parse(JSON.stringify(result))
-          return res
-            .status(200)
-            .send({ success: true, data: value, message: 'Data fetched !!' })
-        }
-      }
-    )
-  }
-  const monthlysalechart = (req, res) => {
-    const authToken = req.headers.authorization.split(' ')[1]
-    const decode = jwt.verify(authToken, jwt_secret)
-    const table = [req.params.tablename]
-    const col1 = [req.params.col1]
-    const val1 = [req.params.val1]
-    const para1 = [req.params.para1]
-    const id = [req.params.orderby]
-    console.log(`SELECT DATE_FORMAT(invoice_date, '%Y-%m') AS date, SUM(total_amount) AS sales FROM invoices GROUP BY DATE_FORMAT(invoice_date, '%Y-%m') ORDER BY DATE_FORMAT(invoice_date, '%Y-%m'); `);
-    db.query(
-      `SELECT DATE_FORMAT(invoice_date, '%Y-%m') AS date, ROUND(SUM(total_amount),2) AS sales FROM ${table} GROUP BY DATE_FORMAT(invoice_date, '%Y-%m') ORDER BY DATE_FORMAT(invoice_date, '%Y-%m')`,
-      function (err, result, fields) {
-        if (err) {
-          console.log('Invalid field ' + err)
-          return
-        } else {
-          var value = JSON.parse(JSON.stringify(result))
-          return res
-            .status(200)
-            .send({ success: true, data: value, message: 'Data fetched !!' })
-        }
-      }
-    )
-  }
-  const minimumquantity = (req, res) => {
-    const authToken = req.headers.authorization.split(' ')[1]
-    const decode = jwt.verify(authToken, jwt_secret)
-    const lmt = [req.params.lmt]
-    
-    //console.log(``);
-    db.query(
-      `SELECT 
+
+      res.json({
+        totalSales: salesResult[0].totalSales || 0,
+        totalPurchase: purchaseResult[0].totalPurchase || 0,
+      });
+    });
    
-      i.prod_name,
-      i.balance,
-      t.min_qty,
-      CASE
-          WHEN i.balance < t.min_qty THEN 'Below Minimum'
-          ELSE 'Sufficient'
-      END AS status
-  FROM 
-      inventory i
-  JOIN 
-      (SELECT 
-           prod_name, 
-           MAX(id) AS latest_id 
-       FROM 
-           inventory 
-       GROUP BY 
-           prod_name) latest 
-  ON 
-      i.prod_name = latest.prod_name AND i.id = latest.latest_id
-  JOIN 
-      products t ON i.prod_name = t.prod_name
-  WHERE 
-      i.balance < t.min_qty ${lmt};`,
-      function (err, result, fields) {
-        if (err) {
-          console.log('Invalid field ' + err)
-          return
-        } else {
-          var value = JSON.parse(JSON.stringify(result))
-          return res
-            .status(200)
-            .send({ success: true, data: value, message: 'Data fetched !!' })
-        }
-      }
-    )
-  }
+  });
+};
+
 module.exports = {
-    countRecord,
-    todayRecord,
-    monthlysalechart,
-    minimumquantity,
+    getSales,
+    getPurchase,
+    getSummary
+
+
 }
