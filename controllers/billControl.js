@@ -213,137 +213,7 @@ const updateBill = async (req, res) => {
     connection.release();
   }
 };
-const savePayment1 = async (req, res) => {
-  const connection = await db.getConnection();
-  await connection.beginTransaction();
 
-  try {
-    const { customer_id, amount_paid, payment_mode } = req.body;
-    let remaining_amount = amount_paid;
-
-    // Fetch unpaid invoices (oldest first)
-    const [invoices] = await connection.execute(`
-      SELECT id, grand_total, paid_amount FROM final_bill 
-      WHERE customer_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
-      ORDER BY inv_date ASC;
-    `, [customer_id]);
-
-    if (invoices.length === 0) {
-      return res.status(400).json({ success: false, message: "No outstanding invoices." });
-    }
-
-    let payments = [];
-//testing upotae upto 15may 2025
-    for (let invoice of invoices) {
-      if (remaining_amount <= 0) break;
-
-      let due_amount = invoice.grand_total - invoice.paid_amount;
-      let payment_to_apply = Math.min(due_amount, remaining_amount);
-      remaining_amount -= payment_to_apply;
-
-      let new_status = (invoice.paid_amount + payment_to_apply) >= invoice.grand_total ? "Paid" : "Partially Paid";
-
-      // ✅ Update `paid_amount` instead of `grand_total`
-      await connection.execute(`
-        UPDATE final_bill 
-        SET paid_amount = paid_amount + ?, status = ? 
-        WHERE id = ?;
-      `, [payment_to_apply, new_status, invoice.id]);
-
-      // ✅ Insert Ledger Entries
-      payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
-      payments.push([invoice.id, new Date(), "Accounts Receivable", customer_id, "Payment Received", 0.00, payment_to_apply]);
-    }
-
-    // Insert into `ledger_entries`
-    await connection.query(`
-      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-    `, [payments]);
-
-    await connection.commit();
-    res.status(201).json({ success: true, message: "Payment recorded successfully!" });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error processing payment:", error);
-    res.status(500).json({ success: false, message: "Payment processing failed", error });
-  } finally {
-    connection.release();
-  }
-};
-
-
-const savePayment2 = async (req, res) => {
-
-  const connection = await db.getConnection();
-  await connection.beginTransaction();
-
-  try {
-    const { customer_id, amount_paid, payment_mode, reference_number } = req.body;
-    if (!customer_id || amount_paid === undefined || !payment_mode) {
-      return res.status(400).json({ success: false, message: "Invalid payment data." });
-    }
-    let remaining_amount = amount_paid;
-    console.log(customer_id);
-    // Fetch unpaid invoices
-    const [invoices] = await connection.execute(`
-      SELECT id, grand_total, paid_amount FROM final_bill 
-      WHERE customer_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
-      ORDER BY inv_date ASC;
-    `, [customer_id]);
-
-    if (!invoices || invoices.length === 0) {
-      return res.status(400).json({ success: false, message: "No outstanding invoices." });
-    }
-
-    console.log("Received Payment Data:", req.body);
-
-
-    let payments = [];
-
-    for (let invoice of invoices) {
-      if (remaining_amount <= 0) break;
-
-      let due_amount = invoice.grand_total - invoice.paid_amount;
-      let payment_to_apply = Math.min(due_amount, remaining_amount);
-      remaining_amount -= payment_to_apply;
-
-      let new_status = (invoice.paid_amount + payment_to_apply) >= invoice.grand_total ? "Paid" : "Partially Paid";
-
-      // ✅ Update `paid_amount` in `final_bill`
-      await connection.execute(`
-        UPDATE final_bill 
-        SET paid_amount = paid_amount + ?, status = ? 
-        WHERE id = ?;
-      `, [payment_to_apply, new_status, invoice.id]);
-
-      // ✅ Insert Ledger Entries
-      payments.push([invoice.id, new Date(), payment_mode, customer_id, "Customer Payment Received", payment_to_apply, 0.00]);
-      payments.push([invoice.id, new Date(), "Accounts Receivable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
-      console.log("Generated Payments Data:", payments);
-      // ✅ Insert record into `receipt_vouchers`
-      await connection.execute(`
-        INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
-        VALUES (?, ?, ?, ?, ?, NOW());
-      `, [customer_id, invoice.id, payment_to_apply, payment_mode, reference_number]);
-    }
-
-    // Insert into `ledger_entries`
-    await connection.query(`
-      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-    `, [payments]);
-
-    await connection.commit();
-    res.status(201).json({ success: true, message: "Payment recorded successfully!" });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error processing payment:", error);
-    res.status(500).json({ success: false, message: "Payment processing failed", error });
-  } finally {
-    connection.release();
-  }
-};
 const savePayment = async (req, res) => {
 
   const connection = await db.getConnection();
@@ -417,22 +287,83 @@ const savePayment = async (req, res) => {
 };
 
 
+const saveSupplierPayment = async (req, res) => {
+  const connection = await db.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    const { supplier_id, amount_paid, payment_mode, reference_number } = req.body;
+    if (!supplier_id || amount_paid === undefined || !payment_mode) {
+      return res.status(400).json({ success: false, message: "Invalid payment data." });
+    }
+
+    // Determine account_type based on payment_mode
+    // Example logic: if payment_mode is 'Cash', account_type = 'Cash Account'
+    // You can adjust this mapping as needed
+    let account_type = "";
+    switch (payment_mode.toLowerCase()) {
+      case "cash":
+        account_type = "Cash Account";
+        break;
+      case "bank":
+      case "cheque":
+        account_type = "Bank Account";
+        break;
+      case "card":
+        account_type = "Card Account";
+        break;
+      default:
+        account_type = "Other Account";
+    }
+
+    const paymentDate = new Date();
+
+    // Insert ledger entries for the payment
+    // 1. Debit entry for the payment account (e.g., Cash/Bank)
+    // 2. Credit entry for the supplier account (supplier_id)
+    const ledgerEntries = [
+      [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
+      [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
+    ];
+
+    await connection.query(`
+      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+    `, [ledgerEntries]);
+
+    // Insert into payment_voucher table
+    await connection.execute(`
+      INSERT INTO payment_voucher (supplier_id, amount_paid, payment_mode, reference_number, created_at)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [supplier_id, amount_paid, payment_mode, reference_number]);
+
+    await connection.commit();
+    res.status(201).json({ success: true, message: "Supplier payment recorded successfully!" });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error processing supplier payment:", error);
+    res.status(500).json({ success: false, message: "Supplier payment processing failed", error });
+  } finally {
+    connection.release();
+  }
+};
 
 
 const getOutstandingBalance = async (req, res) => {
   try {
-    const { customer_id } = req.params;
+    const { ac_type,customer_id } = req.params;
+//console.log("Params received:", req.params);
 
     const query = `
       SELECT 
         SUM(debit_amount) - SUM(credit_amount) AS outstanding_balance
       FROM ledger_entries
-      WHERE account_type = 'Account Recievable' 
+      WHERE account_type = ? 
       AND account_id = ?;
     `;
-   // console.log(query);
-    //console.log(customer_id);
-    const [result] = await db.execute(query, [customer_id]);
+    //console.log(query);
+ 
+    const [result] = await db.execute(query, [ac_type,customer_id]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
     //console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
@@ -442,6 +373,7 @@ const getOutstandingBalance = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching balance", error });
   }
 };
+
 
 
 

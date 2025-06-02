@@ -48,9 +48,12 @@ router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontro
 router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAuthorize,viewcontroller.fetchDataFromTwoTables);
 
 router.get('/getoutstandingbalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
+router.get('/getoutstandingbalance/:ac_type/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
 router.get('/getclosingstock/:item_id', auth.isAuthorize, viewcontroller.getInventoryClosingStock);
 // routes/userroutes.js
 router.get("/inventory/joined", auth.isAuthorize, viewcontroller.getInventoryWithItems);
+router.get("/checkledgerentry/:refno", auth.isAuthorize, viewcontroller.checkledgerentry);
+router.get("/getinvoiceitems/:refno", auth.isAuthorize, viewcontroller.getinvoiceitems);
 
 
 //Get

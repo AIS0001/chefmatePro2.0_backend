@@ -331,7 +331,37 @@ const getInventoryWithItems = (req, res) => {
   });
 };
 
+const getinvoiceitems = (req, res) => {
+  const { refno } = req.params;
+  const query = `SELECT * FROM inventory WHERE refno = ?`;
 
+  db.query(query, [refno], (err, rows) => {
+    if (err) {
+      console.error('Get invoice items error:', err);
+      return res.status(500).json({ error: 'Error fetching items' });
+    }
+
+    res.json(rows);
+  });
+};
+
+
+const checkledgerentry = (req, res) => {
+  const { refno } = req.params;
+  const query = 'SELECT * FROM ledger_entries WHERE transaction_id = ?';
+
+  db.query(query, [refno], (err, rows) => {
+    if (err) {
+      console.error('Ledger check error:', err);
+      return res.status(500).json({ error: 'Ledger lookup failed' });
+    }
+
+    res.json({
+      exists: rows.length > 0,
+      data: rows
+    });
+  });
+};
 
 module.exports = {
   getMaxOrderNumber,
@@ -346,5 +376,7 @@ module.exports = {
   getOrderDetailsWithSubtotals,
   getInventoryClosingStock,
   getInventoryWithItems,
+  checkledgerentry,
+  getinvoiceitems
 
 }
