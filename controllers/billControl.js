@@ -398,4 +398,4 @@ const getCustomerInvoices = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching invoices", error });
   }
 };
-module.exports = { savebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices };
+module.exports = { savebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices,saveSupplierPayment };
