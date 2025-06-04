@@ -35,11 +35,14 @@ router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 //Insert Data 
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
 router.post('/savepayment',auth.isAuthorize,billcontroller.savePayment);
+router.post('/saveSupplierPayment',auth.isAuthorize,billcontroller.saveSupplierPayment);
 router.post('/savebill',auth.isAuthorize,savebillController.savebill);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
 router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
 
 //View
+
+router.get('/checkline',auth.isAuthorize,viewcontroller.checklLineDiscount);
 
 router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);
 router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.viewAllData);

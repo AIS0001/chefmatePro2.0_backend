@@ -362,7 +362,16 @@ const checkledgerentry = (req, res) => {
     });
   });
 };
+const checklLineDiscount = (req, res) => {
+ const { phone } = req.body;
+  const user =  db.query("SELECT * FROM line_discount_customers WHERE phone = ?", [phone]);
 
+  if (user.length > 0) {
+    return res.json({ eligible: false });
+  }
+
+  return res.json({ eligible: true });
+};
 module.exports = {
   getMaxOrderNumber,
   allUsers,
@@ -377,6 +386,7 @@ module.exports = {
   getInventoryClosingStock,
   getInventoryWithItems,
   checkledgerentry,
-  getinvoiceitems
+  getinvoiceitems,
+  checklLineDiscount
 
 }
