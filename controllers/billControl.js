@@ -261,12 +261,12 @@ const savePayment = async (req, res) => {
       // ✅ Insert Ledger Entries
       payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
       payments.push([invoice.id, new Date(), "Account Recievable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
-      console.log("Generated Payments Data:", payments);
+      //console.log("Generated Payments Data:", payments);
       // ✅ Insert record into `receipt_vouchers`
       await connection.execute(`
         INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
         VALUES (?, ?, ?, ?, ?, NOW());
-      `, [customer_id, "PAY_"+invoice.id, payment_to_apply, payment_mode, reference_number]);
+      `, [customer_id, "RECPT_"+invoice.id, payment_to_apply, payment_mode, reference_number]);
     }
 
     // Insert into `ledger_entries`
@@ -292,7 +292,7 @@ const saveSupplierPayment = async (req, res) => {
   await connection.beginTransaction();
 
   try {
-    const { supplier_id, amount_paid, payment_mode, reference_number } = req.body;
+    const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
     if (!supplier_id || amount_paid === undefined || !payment_mode) {
       return res.status(400).json({ success: false, message: "Invalid payment data." });
     }
@@ -325,16 +325,16 @@ const saveSupplierPayment = async (req, res) => {
       [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
       [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
     ];
-
+// const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
     await connection.query(`
       INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
     `, [ledgerEntries]);
 
     // Insert into payment_voucher table
     await connection.execute(`
-      INSERT INTO payment_voucher (supplier_id, amount_paid, payment_mode, reference_number, created_at)
-      VALUES (?, ?, ?, ?, NOW())
-    `, [supplier_id, amount_paid, payment_mode, reference_number]);
+      INSERT INTO payment_vouchers (supplier_id, amount_paid, payment_mode, reference_id,remarks, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `, [supplier_id, amount_paid, payment_mode, reference_number,remarks]);
 
     await connection.commit();
     res.status(201).json({ success: true, message: "Supplier payment recorded successfully!" });

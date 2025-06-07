@@ -184,6 +184,42 @@ const fetchDataFromTwoTables = (req, res) => {
       res.json({ data: results });
   });
 };
+const fetchDataFromTwoTables1 = (req, res) => {
+  let { tbl1, tbl2, col1, col2, orderby } = req.params;
+  const { where } = req.query;
+
+  // Basic sanitization
+  if (!allowedTables.includes(tbl1) || !allowedTables.includes(tbl2)) {
+    return res.status(400).json({ error: "Invalid table names" });
+  }
+
+  if (!allowedColumns.includes(col1) || !allowedColumns.includes(col2)) {
+    return res.status(400).json({ error: "Invalid column names" });
+  }
+
+  // Optional: sanitize orderby column
+  if (orderby && !allowedColumns.includes(orderby)) {
+    return res.status(400).json({ error: "Invalid orderby column" });
+  }
+
+  let query = `
+    SELECT t1.*, t2.name AS supplier_name
+    FROM ${tbl1} t1
+    INNER JOIN ${tbl2} t2 ON t1.${col1} = t2.${col2}
+    ${where ? `WHERE ${where}` : ""}
+    ${orderby ? `ORDER BY ${orderby}` : ""}
+  `;
+
+  console.log("SQL Query:", query);
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Query Error:", err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json({ data: results });
+  });
+};
 
 
 const getMaxOrderNumber = (req,res)=>{
