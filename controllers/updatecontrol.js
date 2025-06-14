@@ -59,6 +59,50 @@ const updateStatus = (req, res) => {
     }
   )
 }
+const updateSubscription = (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ msg: "Authorization token missing" });
+  }
+  const authToken = authHeader.split(' ')[1];
+
+  const id = req.params.id; // get subscription id from URL param
+  const updateData = req.body; // expected to contain fields to update, e.g. { status: 'hold', customer_name: 'New Name' }
+console.log(id);
+console.log(updateData);
+  if (!id) {
+    return res.status(400).send({ msg: "Subscription ID is required" });
+  }
+
+  // Basic validation or sanitize here if needed
+
+  // Build SET clause dynamically and use parameterized query to avoid SQL injection
+  const fields = Object.keys(updateData);
+  if (fields.length === 0) {
+    return res.status(400).send({ msg: "No fields to update" });
+  }
+
+  const setClause = fields.map((field, idx) => `${field} = ?`).join(", ");
+  const values = fields.map(field => updateData[field]);
+  values.push(id); // for WHERE clause
+
+  const sql = `UPDATE coresetting SET ${setClause} WHERE id = ?`;
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error("DB update error:", err);
+      return res.status(500).send({ msg: "Database error", error: err });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).send({ msg: "Subscription not found" });
+    }
+
+    res.status(200).send({ msg: "Subscription updated successfully" });
+  });
+};
+
+
 const updateStatus1 = (req, res) => {
   const authToken = req.headers.authorization.split(' ')[1]
   const table = [req.params.tablename]
@@ -124,30 +168,7 @@ const updateCompanyInfo = (req, res) => {
   )
 }
 
-const updatedata34 = (req, res) => {
-  const table = req.params.tablename;
-  const col1 = req.params.col1; // ID field for the condition
-  const val1 = req.params.val1; // ID field for the condition
-  const updatedData = req.body; // Updated fields and values
-  
-  // Construct query with dynamic field updates
-  const updateQuery = `UPDATE ?? SET ? WHERE ${col1} = ? `;
 
-  // Execute the query
-  db.query(updateQuery, [table, updatedData, val1], (error, result) => {
-    if (error) {
-      console.error("Error updating data:", error);
-      return res.status(500).json({ success: false, message: 'Error updating data', error });
-    }
-
-    // Check if the update affected any rows
-    if (result.affectedRows > 0) {
-      res.status(200).json({ success: true, message: 'Data updated successfully' });
-    } else {
-      res.status(404).json({ success: false, message: 'Data not found' });
-    }
-  });
-};
 const updatedata = (req, res) => {
   const table = req.params.tablename;
   const { updatedFields, where } = req.body;
@@ -188,5 +209,6 @@ module.exports = {
   updateStatus,
   updateStatus1,
   updateCompanyInfo,
-  updatedata
+  updatedata,
+  updateSubscription
 }

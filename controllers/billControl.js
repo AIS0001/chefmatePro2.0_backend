@@ -112,6 +112,122 @@ const savebill = async (req, res) => {
     connection.release(); // Release the connection back to the pool
   }
 };
+const advancesavebill = async (req, res) => {
+  const connection = await db.getConnection(); // Get a connection from the pool
+
+  try {
+    await connection.beginTransaction(); // Start transaction
+
+    const {
+      customer_id,
+      table_number,
+      subtotal,
+      discount_type,
+      discount_value,
+      discount_amount,
+      subtotal_afterdiscount,
+      tax,
+      roundoff,
+      grand_total,
+      payment_mode,
+      status,
+      pickup_date,
+      pickup_time,
+      special_note,
+      order_type,
+      bill_generated_by,
+      final_billed,
+      paid_amount,
+    } = req.body;
+
+    // Insert into `final_bill`
+    const billQuery = `
+      INSERT INTO advance_final_bill (
+        customer_id, inv_date, inv_time, table_number,
+        subtotal, discount_type, discount_value, discount_amount,
+        subtotal_afterdiscount, tax, roundoff, grand_total,
+        payment_mode, status, pickup_date, pickup_time,
+        special_note, order_type, bill_generated_by,
+        final_billed, paid_amount
+      )
+      VALUES (
+        ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `;
+
+    const [billResult] = await connection.execute(
+      billQuery,
+      [
+        customer_id,
+        table_number,
+        subtotal,
+        discount_type,
+        discount_value,
+        discount_amount,
+        subtotal_afterdiscount,
+        tax,
+        roundoff,
+        grand_total,
+        payment_mode,
+        status,
+        pickup_date,
+        pickup_time,
+        special_note,
+        order_type,
+        bill_generated_by,
+        final_billed,
+        paid_amount
+      ]
+    );
+
+    const bill_id = billResult.insertId;
+    if (!bill_id) throw new Error("Bill ID not generated");
+
+    const transaction_id = bill_id;
+
+    // Ledger Accounts
+    const sales_account_id = 1;
+    const cash_account_id = 2;
+    const receivable_account_id = 3;
+
+    let ledgerEntries = [
+      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sale Revenue`, 0.00, grand_total, null]
+    ];
+
+    if (payment_mode === "Cash") {
+      ledgerEntries.push([transaction_id, new Date(), "Cash", null, `Bill #${bill_id} - Cash Payment`, grand_total, 0.00, null]);
+    } else if (payment_mode === "Bank Transfer") {
+      ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", null, `Bill #${bill_id} - Bank Transfer Payment`, grand_total, 0.00, null]);
+    } else if (payment_mode === "QR Code") {
+      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${bill_id} - QR Payment`, grand_total, 0.00, null]);
+    } else if (payment_mode === "UPI") {
+      ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, null]);
+    } else if (payment_mode === "Credit") {
+      ledgerEntries.push([transaction_id, new Date(), "Account Receivable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, null]);
+    }
+
+    // Insert ledger entries
+    const ledgerQuery = `
+      INSERT INTO ledger_entries (
+        transaction_id, date, account_type, account_id,
+        description, debit_amount, credit_amount, reference_id
+      )
+      VALUES ?
+    `;
+
+    await connection.query(ledgerQuery, [ledgerEntries]);
+
+    await connection.commit();
+    res.status(201).json({ success: true, message: "Bill & Ledger saved successfully!", bill_id });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error saving bill:", error);
+    res.status(500).json({ success: false, message: "Error saving bill", error });
+  } finally {
+    connection.release();
+  }
+};
 
 
 
@@ -236,10 +352,10 @@ const savePayment = async (req, res) => {
     if (!invoices || invoices.length === 0) {
       return res.status(400).json({ success: false, message: "No outstanding invoices." });
     }
-    
+
     console.log("Received Payment Data:", req.body);
-    
-    
+
+
     let payments = [];
 
     for (let invoice of invoices) {
@@ -266,7 +382,7 @@ const savePayment = async (req, res) => {
       await connection.execute(`
         INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
         VALUES (?, ?, ?, ?, ?, NOW());
-      `, [customer_id, "RECPT_"+invoice.id, payment_to_apply, payment_mode, reference_number]);
+      `, [customer_id, "RECPT_" + invoice.id, payment_to_apply, payment_mode, reference_number]);
     }
 
     // Insert into `ledger_entries`
@@ -292,7 +408,7 @@ const saveSupplierPayment = async (req, res) => {
   await connection.beginTransaction();
 
   try {
-    const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
+    const { supplier_id, amount_paid, payment_mode, reference_number, remarks } = req.body;
     if (!supplier_id || amount_paid === undefined || !payment_mode) {
       return res.status(400).json({ success: false, message: "Invalid payment data." });
     }
@@ -325,7 +441,7 @@ const saveSupplierPayment = async (req, res) => {
       [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
       [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
     ];
-// const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
+    // const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
     await connection.query(`
       INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
     `, [ledgerEntries]);
@@ -334,7 +450,7 @@ const saveSupplierPayment = async (req, res) => {
     await connection.execute(`
       INSERT INTO payment_vouchers (supplier_id, amount_paid, payment_mode, reference_id,remarks, created_at)
       VALUES (?, ?, ?, ?, ?, NOW())
-    `, [supplier_id, amount_paid, payment_mode, reference_number,remarks]);
+    `, [supplier_id, amount_paid, payment_mode, reference_number, remarks]);
 
     await connection.commit();
     res.status(201).json({ success: true, message: "Supplier payment recorded successfully!" });
@@ -351,8 +467,8 @@ const saveSupplierPayment = async (req, res) => {
 
 const getOutstandingBalance = async (req, res) => {
   try {
-    const { ac_type,customer_id } = req.params;
-//console.log("Params received:", req.params);
+    const { ac_type, customer_id } = req.params;
+    //console.log("Params received:", req.params);
 
     const query = `
       SELECT 
@@ -362,8 +478,8 @@ const getOutstandingBalance = async (req, res) => {
       AND account_id = ?;
     `;
     //console.log(query);
- 
-    const [result] = await db.execute(query, [ac_type,customer_id]);
+
+    const [result] = await db.execute(query, [ac_type, customer_id]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
     //console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
@@ -398,4 +514,4 @@ const getCustomerInvoices = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching invoices", error });
   }
 };
-module.exports = { savebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices,saveSupplierPayment };
+module.exports = { savebill, advancesavebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices, saveSupplierPayment };

@@ -37,7 +37,9 @@ router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdat
 router.post('/savepayment',auth.isAuthorize,billcontroller.savePayment);
 router.post('/saveSupplierPayment',auth.isAuthorize,billcontroller.saveSupplierPayment);
 router.post('/savebill',auth.isAuthorize,savebillController.savebill);
+router.post('/advancesavebill',auth.isAuthorize,savebillController.advancesavebill);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
+router.post('/insertdatabulkgst/:tablename',auth.isAuthorize,insertcontroller.insertdatabulkgst);
 router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
 
 //View
@@ -45,6 +47,7 @@ router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAutho
 router.get('/checkline',auth.isAuthorize,viewcontroller.checklLineDiscount);
 
 router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);
+router.get('/fetchdatanotequal/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchDatanotequal);
 router.get('/viewalldata/:tablename/:orderby',auth.isAuthorize,viewcontroller.viewAllData);
 router.get('/combolist/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolist);
 router.get('/combolistwithWhere/:tablename/:groupby',auth.isAuthorize,viewcontroller.combolistwithWhere);
@@ -57,6 +60,7 @@ router.get('/getclosingstock/:item_id', auth.isAuthorize, viewcontroller.getInve
 router.get("/inventory/joined", auth.isAuthorize, viewcontroller.getInventoryWithItems);
 router.get("/checkledgerentry/:refno", auth.isAuthorize, viewcontroller.checkledgerentry);
 router.get("/getinvoiceitems/:refno", auth.isAuthorize, viewcontroller.getinvoiceitems);
+router.get("/order_items_gst_joined", auth.isAuthorize, viewcontroller.getOrderItemsGstJoined);
 
 
 //Get
@@ -68,6 +72,7 @@ router.get('/getorderdetails/:table1/:table2',auth.isAuthorize,viewcontroller.ge
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
 router.put('/updatedata/:tablename',auth.isAuthorize,updatecontroller.updatedata);
+router.put('/updatesubscription/:tablename/:id',auth.isAuthorize,updatecontroller.updateSubscription);
 
 //delete data 
 router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);

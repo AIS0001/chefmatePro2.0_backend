@@ -120,7 +120,7 @@ const savebill = async (req, res) => {
 const insertdatabulk = (req, res) => {
   // Check if the table name is provided and is a valid string
   const tableName = req.params.tablename;
-  const validTableNames = ['order_items']; // Add valid table names to this array
+  const validTableNames = ['order_items','advance_order_items']; // Add valid table names to this array
   
   if (!validTableNames.includes(tableName)) {
     return res.status(400).send({ success: false, message: 'Invalid table name' });
@@ -152,6 +152,67 @@ const insertdatabulk = (req, res) => {
   db.query(query, [values], (err, results) => {
     if (err) {
       console.error('Error saving order items:', err); // Log the error
+      return res.status(500).send({ success: false, message: 'Error saving order items' });
+    }
+
+    res.send({ success: true, message: 'Order items saved successfully' });
+  });
+};
+const insertdatabulkgst = (req, res) => {
+  const tableName = req.params.tablename;
+  const validTableNames = ['order_items_gst', 'advance_order_items_gst']; // Allow both
+
+  if (!validTableNames.includes(tableName)) {
+    return res.status(400).send({ success: false, message: 'Invalid table name' });
+  }
+
+  const items = req.body.items;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).send({ success: false, message: 'No items provided' });
+  }
+
+  // Build insert fields and values depending on table
+  let query, values;
+
+  if (tableName === 'order_items_gst' || tableName === 'advance_order_items_gst' ) {
+    values = items.map(item => [
+      item.order_id,
+      item.table_number,
+      item.item_name,
+      item.quantity,
+      item.uom || '',
+      item.rate || 0,
+      item.cgst || 0,
+      item.sgst || 0,
+      item.igst || 0,
+      item.tax_amount || 0,
+      item.total_price,
+      item.status,
+    ]);
+
+    query = `INSERT INTO ${tableName} 
+      (order_id, table_number, item_name, quantity, uom, rate, cgst, sgst, igst, tax_amount, total_price, status) 
+      VALUES ?`;
+  } else {
+    // Fallback for original order_items table
+    values = items.map(item => [
+      item.order_number,
+      item.table_number,
+      item.item_name,
+      item.quantity,
+      item.total_amount,
+      item.status,
+    ]);
+
+    query = `INSERT INTO ${tableName} 
+      (order_id, table_number, item_name, quantity, total_price, status) 
+      VALUES ?`;
+  }
+console.log(query);
+  db.query(query, [values], (err, results) => {
+    if (err) {
+      console.error('Error saving order items:', err);
       return res.status(500).send({ success: false, message: 'Error saving order items' });
     }
 
@@ -219,6 +280,7 @@ module.exports = {
   insertdata,
   savebill,
   insertdatabulk,
+  insertdatabulkgst,
   addNewProduct,
   uploadcsv,
 }
