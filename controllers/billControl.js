@@ -330,7 +330,7 @@ const updateBill = async (req, res) => {
   }
 };
 
-const savePayment = async (req, res) => {
+const savePaymentold = async (req, res) => {
 
   const connection = await db.getConnection();
   await connection.beginTransaction();
@@ -386,6 +386,81 @@ const savePayment = async (req, res) => {
     }
 
     // Insert into `ledger_entries`
+    await connection.query(`
+      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+    `, [payments]);
+
+    await connection.commit();
+    res.status(201).json({ success: true, message: "Payment recorded successfully!" });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error processing payment:", error);
+    res.status(500).json({ success: false, message: "Payment processing failed", error });
+  } finally {
+    connection.release();
+  }
+};
+const savePayment = async (req, res) => {
+  const connection = await db.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    const { customer_id, amount_paid, payment_mode, reference_number } = req.body;
+    if (!customer_id || amount_paid === undefined || !payment_mode) {
+      return res.status(400).json({ success: false, message: "Invalid payment data." });
+    }
+
+    let remaining_amount = amount_paid;
+    let total_applied = 0; // Track how much was actually applied to invoices
+
+    // Fetch unpaid invoices
+    const [invoices] = await connection.execute(`
+      SELECT id, grand_total, paid_amount FROM final_bill 
+      WHERE customer_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
+      ORDER BY inv_date ASC;
+    `, [customer_id]);
+
+    if (!invoices || invoices.length === 0) {
+      return res.status(400).json({ success: false, message: "No outstanding invoices." });
+    }
+
+    console.log("Received Payment Data:", req.body);
+
+    let payments = [];
+
+    for (let invoice of invoices) {
+      if (remaining_amount <= 0) break;
+
+      let due_amount = invoice.grand_total - invoice.paid_amount;
+      let payment_to_apply = Math.min(due_amount, remaining_amount);
+      remaining_amount -= payment_to_apply;
+      total_applied += payment_to_apply;
+
+      let new_status = (invoice.paid_amount + payment_to_apply) >= invoice.grand_total ? "Paid" : "Partially Paid";
+
+      await connection.execute(`
+        UPDATE final_bill 
+        SET paid_amount = paid_amount + ?, status = ? 
+        WHERE id = ?;
+      `, [payment_to_apply, new_status, invoice.id]);
+
+      payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
+      payments.push([invoice.id, new Date(), "Account Recievable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
+    }
+
+    // ✅ Single receipt_voucher entry (not one per invoice)
+    await connection.execute(`
+      INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW());
+    `, [
+      customer_id,
+      `RECPT_${Date.now()}`, // generate a unique ID for the overall receipt
+      total_applied,
+      payment_mode,
+      reference_number
+    ]);
+
     await connection.query(`
       INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
     `, [payments]);
