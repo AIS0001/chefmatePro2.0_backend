@@ -1,31 +1,40 @@
+require('dotenv').config(); // Ensure environment variables are loaded first
+const mysql = require('mysql2');
 
-DB_PASSWORD='Realforce@123';
-const mysql = require('mysql2'); // Use mysql2 for async/await support
-const { DB_HOST, DB_USERNAME, DB_NAME } = process.env;
+// Destructure all DB-related env variables
+const {
+  DB_HOST,
+  DB_PORT = 3306,         // Default MySQL port
+  DB_USERNAME,
+  DB_PASSWORD,
+  DB_NAME
+} = process.env;
 
-// Create a connection pool
+// Create a connection pool with promise support
 const pool = mysql.createPool({
   host: DB_HOST,
+  port: DB_PORT,
   user: DB_USERNAME,
   password: DB_PASSWORD,
   database: DB_NAME,
   waitForConnections: true,
-  connectionLimit: 10, // Allows up to 10 simultaneous connections
+  connectionLimit: 10,
   queueLimit: 0,
-  dateStrings: true, // Ensures dates are returned as strings
+  dateStrings: true,
 });
 
-// Export a promise-based connection pool
+// Wrap the pool in a promise wrapper for async/await support
 const db = pool.promise();
 
-// Optional: Test the connection to ensure it's working
+// Optional: Test connection
 db.getConnection()
-  .then(() => {
-    console.log('Database connected successfully!');
+  .then((conn) => {
+    console.log(`✅ MySQL connected: ${DB_NAME}@${DB_HOST}:${DB_PORT}`);
+    conn.release(); // release back to pool
   })
   .catch((err) => {
-    console.error('Database connection failed:', err);
-    process.exit(1); // Exit process with failure code
+    console.error('❌ MySQL connection failed:', err.message);
+    process.exit(1);
   });
 
 module.exports = db;

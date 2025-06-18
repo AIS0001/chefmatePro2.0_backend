@@ -2,7 +2,7 @@ const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const db = require("../config/dbconnection");
 const jwt = require("jsonwebtoken");
-const { jwt_secret } = process.env;
+const jwt_secret  = 'setupnewkey'
 
 const register = (req, res) => {
   const errors = validationResult(req);

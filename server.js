@@ -36,6 +36,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
 
+//app.use(cors());
+app.use((err, req, res, next) => {
+  console.error('Server error middleware:', err);  // will catch thrown errors
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 app.use('/api', userRouters);
 app.use('/api', printRouters);
 app.use('/api', dashboardRouters);
@@ -52,4 +58,5 @@ app.use((err, req, res, next) => {
 // Register the error handling middleware
 app.use(errorHandlerMiddleware);
 
-app.listen(4402, () => console.log('local server connected at port 4402'))
+const PORT = process.env.PORT || 4402;
+app.listen(PORT, () => console.log(`Server connected at port ${PORT}`));

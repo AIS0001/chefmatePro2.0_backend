@@ -31,6 +31,9 @@ router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/allusers',auth.isAuthorize,viewcontroller.allUsers);
 
 router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
+router.get('/test', (req, res) => {
+  res.send('API is working');
+});
 
 //Insert Data 
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
