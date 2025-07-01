@@ -1,83 +1,71 @@
-const { validationResult } = require('express-validator')
-const bcrypt = require('bcryptjs')
-const db = require('../config/dbconnection')
-const jwt = require('jsonwebtoken')
-const { jwt_secret } = process.env
+const { validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
+const db = require('../config/dbconnection1'); // db is now a promise pool
 
-const getSales = (req, res) => {
-  const authToken = req.headers.authorization.split(" ")[1];
-  const query = `
-    SELECT DATE(inv_date) as date, SUM(grand_total) as amount
-    FROM final_bill
-    GROUP BY DATE(inv_date)
-    ORDER BY date
-  `;
+const jwt = require('jsonwebtoken');
+const jwt_secret = process.env.JWT_SECRET || 'setupnewkey';
 
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error("Error fetching sales data:", err);
-      return res.status(500).json({ error: "Failed to fetch sales data" });
-    }
+// GET SALES
+const getSales = async (req, res) => {
+  try {
+    const query = `
+      SELECT DATE(inv_date) as date, SUM(grand_total) as amount
+      FROM final_bill
+      GROUP BY DATE(inv_date)
+      ORDER BY date
+    `;
+
+    const [results] = await db.query(query);
     res.json(results);
-  });
+  } catch (err) {
+    console.error("Error fetching sales data:", err);
+    res.status(500).json({ error: "Failed to fetch sales data", details: err.message });
+  }
 };
 
 
-const getPurchase  = (req, res) => {
-   const query = `
+// GET PURCHASE
+const getPurchase = (req, res) => {
+  const query = `
     SELECT DATE(created_at) as date, SUM(netAmount) as amount
     FROM inventory
     GROUP BY DATE(created_at)
     ORDER BY date
   `;
 
-  db.query(query, (err, results) => {
-    if (err) {
+  db.query(query)
+    .then(([results]) => res.json(results))
+    .catch(err => {
       console.error("Error fetching purchase data:", err);
-      return res.status(500).json({ error: "Failed to fetch purchase data" });
-    }
-    res.json(results);
-  });
-};
-const getSummary = (req, res) => {
-  const salesQuery = `SELECT SUM(grand_total) AS totalSales FROM final_bill`;
-  const purchaseQuery = `SELECT SUM(netAmount) AS totalPurchase FROM inventory`;
-  const topProductQuery = `
-    SELECT item_name, SUM(quantity) AS totalSold
-    FROM order_items
-    GROUP BY item_name
-    ORDER BY totalSold DESC
-    LIMIT 1
-  `;
-
-  db.query(salesQuery, (err, salesResult) => {
-    if (err) {
-      console.error("Error fetching sales summary:", err);
-      return res.status(500).json({ error: "Failed to fetch summary" });
-    }
-
-    db.query(purchaseQuery, (err, purchaseResult) => {
-      if (err) {
-        console.error("Error fetching purchase summary:", err);
-        return res.status(500).json({ error: "Failed to fetch summary" });
-      }
-
-      db.query(topProductQuery, (err, topProductResult) => {
-        if (err) {
-          console.error("Error fetching top product:", err);
-          return res.status(500).json({ error: "Failed to fetch summary" });
-        }
-
-        res.json({
-          totalSales: salesResult[0].totalSales || 0,
-          totalPurchase: purchaseResult[0].totalPurchase || 0,
-          topProduct: topProductResult[0].item_name || null
-        });
-      });
+      res.status(500).json({ error: "Failed to fetch purchase data" });
     });
-  });
 };
 
+// GET SUMMARY
+const getSummary = async (req, res) => {
+  try {
+    const [salesResult] = await db.query(`SELECT SUM(grand_total) AS totalSales FROM final_bill`);
+    const [purchaseResult] = await db.query(`SELECT SUM(netAmount) AS totalPurchase FROM inventory`);
+    const [topProductResult] = await db.query(`
+      SELECT item_name, SUM(quantity) AS totalSold
+      FROM order_items
+      GROUP BY item_name
+      ORDER BY totalSold DESC
+      LIMIT 1
+    `);
+
+    res.json({
+      totalSales: salesResult[0].totalSales || 0,
+      totalPurchase: purchaseResult[0].totalPurchase || 0,
+      topProduct: topProductResult[0]?.item_name || null
+    });
+  } catch (err) {
+    console.error("Error fetching summary:", err);
+    res.status(500).json({ error: "Failed to fetch summary" });
+  }
+};
+
+// GET TOP PRODUCTS
 const getTopProducts = (req, res) => {
   const topProductsQuery = `
     SELECT item_name, SUM(quantity) AS totalSold
@@ -87,128 +75,68 @@ const getTopProducts = (req, res) => {
     LIMIT 10
   `;
 
-  db.query(topProductsQuery, (err, results) => {
-    if (err) {
-      console.error("Error fetching top products:", err);
-      return res.status(500).json({ error: "Failed to fetch top products" });
-    }
-
-    res.json(results);
-  });
-};
-
-const todaysalepurchase = (req, res) => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const todayFormatted = today.toISOString().split('T')[0];
-  const yesterdayFormatted = yesterday.toISOString().split('T')[0];
-
-  const todaySalesQuery = `
-    SELECT SUM(grand_total) AS todaySales 
-    FROM final_bill 
-    WHERE DATE(inv_date) = ?`;
-
-  const yesterdaySalesQuery = `
-    SELECT SUM(grand_total) AS yesterdaySales 
-    FROM final_bill 
-    WHERE DATE(inv_date) = ?`;
-
-  const todayPurchaseQuery = `
-    SELECT SUM(netAmount) AS todayPurchases 
-    FROM inventory 
-    WHERE DATE(pdate) = ?`;
-
-  const yesterdayPurchaseQuery = `
-    SELECT SUM(netAmount) AS yesterdayPurchases 
-    FROM inventory 
-    WHERE DATE(pdate) = ?`;
-
-  const todayTransactionCountQuery = `
-    SELECT COUNT(*) AS transactionCount 
-    FROM final_bill 
-    WHERE DATE(inv_date) = ?`;
-
-  const queryPromise = (query, dateLabel) => {
-    return new Promise((resolve, reject) => {
-      db.query(query.sql, query.params, (err, result) => {
-        if (err) {
-          console.error(`Query failed for ${dateLabel}:`, err);
-          reject(err);
-        } else if (!Array.isArray(result) || result.length === 0) {
-          console.warn(`Empty or invalid result for ${dateLabel}:`, result);
-          resolve(0);
-        } else {
-          const key = Object.keys(result[0])[0];
-          resolve(parseFloat(result[0][key]) || 0);
-        }
-      });
-    });
-  };
-
-  Promise.all([
-    queryPromise({ sql: todaySalesQuery, params: [todayFormatted] }, 'todaySales'),
-    queryPromise({ sql: yesterdaySalesQuery, params: [yesterdayFormatted] }, 'yesterdaySales'),
-    queryPromise({ sql: todayPurchaseQuery, params: [todayFormatted] }, 'todayPurchases'),
-    queryPromise({ sql: yesterdayPurchaseQuery, params: [yesterdayFormatted] }, 'yesterdayPurchases'),
-    queryPromise({ sql: todayTransactionCountQuery, params: [todayFormatted] }, 'transactionCount'),
-  ])
-    .then(([todaySales, yesterdaySales, todayPurchases, yesterdayPurchases, transactionCount]) => {
-      const profitMargin =
-        todaySales > 0
-          ? ((todaySales - todayPurchases) / todaySales) * 100
-          : 0;
-
-      res.json({
-        todaySales,
-        yesterdaySales,
-        todayPurchases,
-        yesterdayPurchases,
-        profitMargin: profitMargin.toFixed(2),
-        todayTransactionCount: transactionCount
-      });
-    })
+  db.query(topProductsQuery)
+    .then(([results]) => res.json(results))
     .catch(err => {
-      console.error("Error fetching summary:", err);
-      res.status(500).json({ error: "Failed to fetch summary" });
+      console.error("Error fetching top products:", err);
+      res.status(500).json({ error: "Failed to fetch top products" });
     });
 };
 
+// GET TODAY SALE & PURCHASE
+const todaysalepurchase = async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    const [todaySales] = await db.query(`SELECT SUM(grand_total) AS val FROM final_bill WHERE DATE(inv_date) = ?`, [today]);
+    const [yesterdaySales] = await db.query(`SELECT SUM(grand_total) AS val FROM final_bill WHERE DATE(inv_date) = ?`, [yesterday]);
+    const [todayPurchases] = await db.query(`SELECT SUM(netAmount) AS val FROM inventory WHERE DATE(pdate) = ?`, [today]);
+    const [yesterdayPurchases] = await db.query(`SELECT SUM(netAmount) AS val FROM inventory WHERE DATE(pdate) = ?`, [yesterday]);
+    const [transactionCount] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE DATE(inv_date) = ?`, [today]);
+
+    const sales = todaySales[0].val || 0;
+    const purchases = todayPurchases[0].val || 0;
+    const profitMargin = sales > 0 ? ((sales - purchases) / sales) * 100 : 0;
+
+    res.json({
+      todaySales: sales,
+      yesterdaySales: yesterdaySales[0].val || 0,
+      todayPurchases: purchases,
+      yesterdayPurchases: yesterdayPurchases[0].val || 0,
+      profitMargin: profitMargin.toFixed(2),
+      todayTransactionCount: transactionCount[0].val || 0
+    });
+  } catch (err) {
+    console.error("Error fetching daily summary:", err);
+    res.status(500).json({ error: "Failed to fetch summary" });
+  }
+};
+
+// LOW STOCK ALERTS
 const getLowStockAlerts = (req, res) => {
   const query = `
-    SELECT 
-      i.id, 
-      i.iname, 
-      i.min_stock, 
-      inv.closing_stock
+    SELECT i.id, i.iname, i.min_stock, inv.closing_stock
     FROM items i
-    JOIN (
-      SELECT item_id, MAX(id) as latest_id
-      FROM inventory
-      GROUP BY item_id
-    ) latest ON latest.item_id = i.id
+    JOIN (SELECT item_id, MAX(id) as latest_id FROM inventory GROUP BY item_id) latest
+    ON latest.item_id = i.id
     JOIN inventory inv ON inv.id = latest.latest_id
     WHERE inv.closing_stock <= i.min_stock
   `;
 
-  db.query(query, (err, results) => {
-    if (err) {
+  db.query(query)
+    .then(([results]) => res.json(results))
+    .catch(err => {
       console.error("Error fetching low stock alerts:", err);
-      return res.status(500).json({ error: "Failed to fetch low stock alerts" });
-    }
-    res.json(results);
-  });
+      res.status(500).json({ error: "Failed to fetch low stock alerts" });
+    });
 };
 
-
 module.exports = {
-    getSales,
-    getPurchase,
-    getSummary,
-    todaysalepurchase,
-    getLowStockAlerts,
-    getTopProducts,
-
-
-}
+  getSales,
+  getPurchase,
+  getSummary,
+  todaysalepurchase,
+  getLowStockAlerts,
+  getTopProducts
+};

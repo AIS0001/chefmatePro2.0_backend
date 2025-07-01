@@ -29,7 +29,7 @@ const db = pool.promise();
 // Optional: Test connection
 db.getConnection()
   .then((conn) => {
-    console.log(`✅ MySQL connected: ${DB_NAME}@${DB_HOST}:${DB_PORT}`);
+    console.log(`✅ dbconnection1 MySQL connected: ${DB_NAME}@${DB_HOST}:${DB_PORT}`);
     conn.release(); // release back to pool
   })
   .catch((err) => {

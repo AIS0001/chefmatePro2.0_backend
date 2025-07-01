@@ -1,148 +1,105 @@
 const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
-const db = require("../config/dbconnection");
+const { db, format } = require("../config/dbconnection");
 const jwt = require("jsonwebtoken");
-const jwt_secret  = 'setupnewkey'
+const jwt_secret = process.env.JWT_SECRET || "setupnewkey";
 
-const register = (req, res) => {
+// REGISTER
+const register = async (req, res) => {
   const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  let userid = Math.floor(Math.random() * (99999 - 1000) + 1000);
-  const mypassword = Math.floor(Math.random() * (99999 - 1000) + 1000);
+  const { name, contact, email, type, lastloggedin, pass } = req.body;
+  const userid = Math.floor(Math.random() * (99999 - 1000) + 1000);
 
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+  try {
+    // Check for existing user
+    const [existingUsers] = await db.execute(
+      `SELECT * FROM users WHERE LOWER(email) = LOWER(?)`,
+      [email]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(409).json({ msg: "This user is already registered" });
+    }
+
+    // Hash password
+    const hashedPass = await bcrypt.hash(pass, 10);
+
+    // Insert user
+    const [insertResult] = await db.execute(
+      `INSERT INTO users (name, uname, contact, pass, type, email, last_loggedin)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, userid, contact, hashedPass, type, email, lastloggedin]
+    );
+
+    res.status(201).json({ msg: "User registered successfully", userId: insertResult.insertId });
+
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ msg: "Server error", error: err });
   }
-  db.query(
-    `SELECT * FROM users where  LOWER(email) = LOWER(${db.escape(
-      req.body.email
-    )});`,
-    (err, result) => {
-      if (result && result.length) {
-        return res.status(409).send({
-          msg: "This user already registered",
-        });
-      } else {
-        bcrypt.hash(req.body.pass, 10, (err, hash) => {
-          if (err) {
-            return res.status(400).send({
-              msg: hash,
-            });
-          } else {
-            //insert data into database
-            console.log(`INSERT INTO users (name,uname,contact,pass,type,email,last_loggedin) VALUES(
-              '${req.body.name}',
-              '${userid}',
-              '${req.body.contact}',
-              '${hash}',
-              '${req.body.type}',
-              '${req.body.email}',
-              '${req.body.lastloggedin}'
-              );`);
-            db.query(
-              `INSERT INTO users (name,uname,contact,pass,type,email,last_loggedin) VALUES(
-              '${req.body.name}',
-              '${userid}',
-              '${req.body.contact}',
-              '${hash}',
-              '${req.body.type}',
-              '${req.body.email}',
-              '${req.body.lastloggedin}'
-              );`,
-              (err, result) => {
-                if (err) {
-                  return res.status(400).send({
-                    msgs: err,
-                  });
-                }
-                return res.status(200).send({
-                  msg: "user data inserted successfully",
-                });
-              }
-            );
-          }
-        });
-      }
-    }
-  );
 };
-const login = (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+
+// LOGIN
+const login = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { uname, pass } = req.body;
+    const query = `SELECT * FROM users WHERE uname = ?`;
+
+    const [rows] = await db.query(query, [uname]);
+
+    if (!rows || rows.length === 0) {
+      return res.status(401).json({ error: "Invalid Username or Password" });
+    }
+
+    const user = rows[0];
+
+    const isMatch = await bcrypt.compare(pass, user.pass);
+
+    if (isMatch) {
+      const token = jwt.sign({ id: user.id, type: user.type }, jwt_secret, { expiresIn: "60m" });
+      res.status(200).json({ msg: "Login successful", token, data: user });
+    } else {
+      res.status(401).json({ error: "Invalid Password" });
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
-  console.log(`SELECT * FROM users WHERE uname=${db.escape(req.body.uname)}`);
-  db.query(
-    `SELECT * FROM users WHERE uname=${db.escape(req.body.uname)};`,
-    (err, result) => {
-      if (err) {
-        return res.status(400).send({
-          msg: err,
-        });
-      }
-      if (!result) {
-        res.status(500).json({ error: 'Uname OR Password is Incorrect' });
-        return;
-
-      }
-     // console.log(result.length);
-      if (result.length === 0) {
-        res.status(500).json({ error: 'Uname OR Password is Incorrect' });
-        return;
-      }
-      else {
-        bcrypt.compare(req.body.pass, result[0]["pass"], (berr, bresult) => {
-          if (berr) {
-            res.status(200).json(berr);
-            return;
-
-          }
-          if (bresult) {
-            // console.log(jwt_secret);
-            const token = jwt.sign(
-              {
-                id: result[0]["id"],
-                type: result[0]["type"]
-              },
-              jwt_secret,
-              { expiresIn: "60m" }
-            );
-          //  console.log(`UPDATE users set last_loggedin=now() WHERE id='${result[0]["id"]}'`);
-            db.query(
-              `UPDATE users set last_loggedin=now() WHERE id='${result[0]["id"]}'`
-            );
-            res.status(200).json({
-              msg: "Logged in Successfully",
-              token,
-              data: result[0],
-            });
-
-          } else {
-            res.status(500).json({ error: 'Password is Incorrect' });
-
-          }
-        });
-      }
-    }
-  );
 };
 
-const getuser = (req, res) => {
-  const authToken = req.headers.authorization.split(" ")[1];
-  const decode = jwt.verify(authToken, jwt_secret);
-  db.query(
-    `SELECT * FROM users WHERE id=?`,
-    decode.id,
-    function (err, result, fields) {
-      if (err) throw error;
-      return res.status(200).send({
-        success: true,
-        data: result,
-        message: "Fetch Dataa Sucessfully",
-      });
-    }
-  );
+
+// GET USER BY TOKEN
+const getuser = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization header missing" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, jwt_secret); // Ensure jwt_secret is defined properly
+    const [rows] = await db.query(`SELECT * FROM users WHERE id = ?`, [decoded.id]);
+
+    res.status(200).json({
+      success: true,
+      data: rows,
+      message: "User fetched successfully",
+    });
+  } catch (err) {
+    console.error("Error verifying token or querying DB:", err);
+    return res.status(403).json({ error: "Invalid token or DB error" });
+  }
 };
+
+
 module.exports = {
   register,
   login,

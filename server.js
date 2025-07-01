@@ -60,3 +60,5 @@ app.use(errorHandlerMiddleware);
 
 const PORT = process.env.PORT || 4402;
 app.listen(PORT, () => console.log(`Server connected at port ${PORT}`));
+//app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+

@@ -1,206 +1,170 @@
 const { validationResult } = require('express-validator')
 const bcrypt = require('bcryptjs')
-const db = require('../config/dbconnection')
+const { db, format } = require('../config/dbconnection');
+
 const jwt = require('jsonwebtoken')
 const path = require('path')
 const fs = require('fs')
 const csv = require('csv-parser')
-const updateDataPara1 = (req, res) => {
-  const authToken = req.headers.authorization.split(' ')[1]
-  const table = [req.params.tablename]
-  const pass = [req.body.pass]
-  const col1 = [req.params.col1]
-  const val1 = [req.params.val1]
 
-  bcrypt.hash(req.body.pass, 10, (err, hash) => {
-    if (err) {
-      return res.status(400).send({
-        msg: hash
-      })
-    } else {
-      //insert data into database
-      console.log(
-        `UPDATE ${table} SET pass= '${hash}' where ${col1}= '${val1}'`
-      )
-      db.query(
-        `UPDATE ${table} SET pass= '${hash}' where ${col1}= '${val1}'`,
-        (err, result) => {
-          if (err) {
-            return res.status(400).send({
-              msg: err
-            })
-          }
-          return res.status(200).send({
-            msg: 'Data updated'
-          })
-        }
-      )
-    }
-  })
-}
-const updateStatus = (req, res) => {
-  const authToken = req.headers.authorization.split(' ')[1]
-  const table = [req.params.tablename]
-  //const inv = [req.body.inv]
-  const col1 = [req.params.col1]
-  const val1 = [req.params.val1]
-  console.log(`UPDATE ${table} SET status= 'paid' where ${col1}= ${val1}`)
-  db.query(
-    `UPDATE ${table} SET status= 'paid'  where ${col1}= ${val1}`,
-    (err, result) => {
-      if (err) {
-        return res.status(400).send({
-          msg: err
-        })
-      }
-      return res.status(200).send({
-        msg: 'Data updated'
-      })
-    }
-  )
-}
-const updateSubscription = (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).send({ msg: "Authorization token missing" });
+const updateDataPara1 = async (req, res) => {
+  try {
+    const table = req.params.tablename;
+    const col1 = req.params.col1;
+    const val1 = req.params.val1;
+
+    const hashed = await bcrypt.hash(req.body.pass, 10);
+    const query = `UPDATE ?? SET pass = ? WHERE ?? = ?`;
+    const values = [table, hashed, col1, val1];
+
+    const [result] = await db.query(query, values);
+    res.status(200).json({ msg: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Password update error:', err);
+    res.status(500).json({ msg: 'Failed to update password', error: err });
   }
-  const authToken = authHeader.split(' ')[1];
+};
 
-  const id = req.params.id; // get subscription id from URL param
-  const updateData = req.body; // expected to contain fields to update, e.g. { status: 'hold', customer_name: 'New Name' }
-console.log(id);
-console.log(updateData);
-  if (!id) {
-    return res.status(400).send({ msg: "Subscription ID is required" });
+const updateStatus = async (req, res) => {
+  try {
+    const table = req.params.tablename;
+    const col1 = req.params.col1;
+    const val1 = req.params.val1;
+
+    const query = `UPDATE ?? SET status = 'paid' WHERE ?? = ?`;
+    const [result] = await db.query(query, [table, col1, val1]);
+
+    res.status(200).json({ msg: 'Status updated to paid' });
+  } catch (err) {
+    console.error('Status update error:', err);
+    res.status(500).json({ msg: 'Failed to update status', error: err });
   }
+};
 
-  // Basic validation or sanitize here if needed
 
-  // Build SET clause dynamically and use parameterized query to avoid SQL injection
-  const fields = Object.keys(updateData);
-  if (fields.length === 0) {
-    return res.status(400).send({ msg: "No fields to update" });
+const updateStatus1 = async (req, res) => {
+  try {
+    const table = req.params.tablename;
+    const col1 = req.params.col1;
+    const val1 = req.params.val1;
+    const mode = req.body.payment_mode;
+
+    const query = `UPDATE ?? SET payment_mode = ? WHERE ?? = ?`;
+    const [result] = await db.query(query, [table, mode, col1, val1]);
+
+    res.status(200).json({ msg: 'Payment mode updated' });
+  } catch (err) {
+    console.error('Payment mode update error:', err);
+    res.status(500).json({ msg: 'Failed to update payment mode', error: err });
   }
+};
 
-  const setClause = fields.map((field, idx) => `${field} = ?`).join(", ");
-  const values = fields.map(field => updateData[field]);
-  values.push(id); // for WHERE clause
 
-  const sql = `UPDATE coresetting SET ${setClause} WHERE id = ?`;
+const updateCompanyInfo = async (req, res) => {
+  try {
+    const table = req.params.tablename;
+    const col1 = req.params.col1;
+    const val1 = req.params.val1;
 
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error("DB update error:", err);
-      return res.status(500).send({ msg: "Database error", error: err });
-    }
+    const updateData = {
+      cname: req.body.cname,
+      address: req.body.address,
+      pincode: req.body.pincode,
+      contact: req.body.contact,
+      gst: req.body.gst,
+      state: req.body.state,
+      bank: req.body.bank,
+      t1: req.body.t1,
+      t2: req.body.t2,
+      t3: req.body.t3,
+    };
+
+    const fields = Object.keys(updateData).map(key => `${key} = ?`).join(", ");
+    const values = Object.values(updateData);
+    values.push(val1);
+
+    const query = `UPDATE ?? SET ${fields} WHERE ?? = ?`;
+    const [result] = await db.query(query, [table, ...values.slice(0, -1), col1, values[values.length - 1]]);
+
+    res.status(200).json({ msg: 'Company info updated' });
+  } catch (err) {
+    console.error('Company info update error:', err);
+    res.status(500).json({ msg: 'Failed to update company info', error: err });
+  }
+};
+
+const updateSubscription = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updateData = req.body;
+
+    const fields = Object.keys(updateData).map(field => `${field} = ?`).join(", ");
+    const values = [...Object.values(updateData), id];
+
+    const query = `UPDATE coresetting SET ${fields} WHERE id = ?`;
+    const [result] = await db.query(query, values);
 
     if (result.affectedRows === 0) {
-      return res.status(404).send({ msg: "Subscription not found" });
+      return res.status(404).json({ msg: "Subscription not found" });
     }
 
-    res.status(200).send({ msg: "Subscription updated successfully" });
-  });
+    res.status(200).json({ msg: "Subscription updated successfully" });
+  } catch (err) {
+    console.error("Subscription update error:", err);
+    res.status(500).json({ msg: "Database error", error: err });
+  }
+};
+
+const updatedata = async (req, res) => {
+  console.log("✅ Entered updatedata function");
+  try {
+    const table = req.params.tablename;
+    const { updatedFields, where } = req.body;
+
+    console.log("🟢 req body:", req.body);
+    console.log("🟢 Updating table:", table);
+    console.log("🟢 updatedFields:", updatedFields);
+    console.log("🟢 where:", where);
+
+    if (!updatedFields || typeof updatedFields !== "object" || Object.keys(updatedFields).length === 0) {
+      return res.status(400).json({ success: false, message: "'updatedFields' must be provided and not empty" });
+    }
+
+    if (!where || typeof where !== "object" || Object.keys(where).length === 0) {
+      return res.status(400).json({ success: false, message: "'where' must be provided and not empty" });
+    }
+
+    // Build SET clause
+    const setFields = Object.keys(updatedFields).map(key => `${key} = ?`).join(", ");
+    const setValues = Object.values(updatedFields);
+
+    // Build WHERE clause
+    const whereClause = Object.keys(where).map(key => `${key} = ?`).join(" AND ");
+    const whereValues = Object.values(where);
+
+    const query = `UPDATE ?? SET ${setFields} WHERE ${whereClause}`;
+
+    // Format query for debugging
+    const formattedQuery = format(query, [table, ...setValues, ...whereValues]);
+    console.log("🟠 Formatted Query:", formattedQuery);
+
+    // Execute the query
+    const [result] = await db.query(query, [table, ...setValues, ...whereValues]);
+
+    if (result.affectedRows > 0) {
+      res.status(200).json({ success: true, message: "Data updated successfully" });
+    } else {
+      res.status(404).json({ success: false, message: "Data not found" });
+    }
+  } catch (err) {
+    console.error("❌ Unexpected error:", err);
+    res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
+  }
 };
 
 
-const updateStatus1 = (req, res) => {
-  const authToken = req.headers.authorization.split(' ')[1]
-  const table = [req.params.tablename]
-  const mode = [req.body.payment_mode]
-  const col1 = [req.params.col1]
-  const val1 = [req.params.val1]
-  console.log(`UPDATE ${table} SET status= 'paid' where ${col1}= ${val1}`)
-  db.query(
-    `UPDATE ${table} SET payment_mode= '${mode}'  where ${col1}= ${val1}`,
-    (err, result) => {
-      if (err) {
-        return res.status(400).send({
-          msg: err
-        })
-      }
-      return res.status(200).send({
-        msg: 'Data updated'
-      })
-    }
-  )
-}
-const updateCompanyInfo = (req, res) => {
-  const authToken = req.headers.authorization.split(' ')[1]
-  const table = [req.params.tablename]
-  const cname = [req.body.cname]
-  const address = [req.body.address]
-  const pincode = [req.body.pincode]
-  const gst = [req.body.gst]
-  const contact = [req.body.contact]
-  const state = [req.body.state]
-  const bank = [req.body.bank]
-  const t1 = [req.body.t1]
-  const t2 = [req.body.t2]
-  const t3 = [req.body.t3]
-
-  const col1 = [req.params.col1]
-  const val1 = [req.params.val1]
-  console.log(`UPDATE ${table} SET status= 'paid' where ${col1}= ${val1}`)
-  db.query(
-    `UPDATE ${table} SET 
-      cname= ${cname},
-      address= ${address},
-      pincode= ${pincode},
-      contact= ${contact},
-      gst= ${gst},
-      state= ${state},
-      bank= ${bank},
-      t1= ${t1},
-      t2= ${t2},
-      t3= ${t3},
-      
-      where ${col1}= ${val1}`,
-    (err, result) => {
-      if (err) {
-        return res.status(400).send({
-          msg: err
-        })
-      }
-      return res.status(200).send({
-        msg: 'Data updated'
-      })
-    }
-  )
-}
 
 
-const updatedata = (req, res) => {
-  const table = req.params.tablename;
-  const { updatedFields, where } = req.body;
-
-  //console.log("Table:", table);
- // console.log("Updated Fields:", updatedFields);
-  //console.log("Where Conditions:", where);
-
-  // Construct WHERE clause dynamically
-  const whereConditions = Object.keys(where)
-      .map(key => `${key} = ?`)
-      .join(' AND ');
-
-  // Extract values for placeholders
-  const whereValues = Object.values(where);
-
-  // Construct the final SQL query
-  const updateQuery = `UPDATE ?? SET ? WHERE ${whereConditions}`;
-
-  db.query(updateQuery, [table, updatedFields, ...whereValues], (error, result) => {
-      if (error) {
-          console.error("Error updating data:", error); // Check this log for any SQL or query errors
-          return res.status(500).json({ success: false, message: 'Error updating data', error });
-      }
-
-      if (result.affectedRows > 0) {
-          res.status(200).json({ success: true, message: 'Data updated successfully' });
-      } else {
-          res.status(404).json({ success: false, message: 'Data not found' });
-      }
-  });
-};
 
 
 

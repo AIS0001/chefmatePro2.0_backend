@@ -1,0 +1,35 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.8.2
+2 info using node@v20.19.2
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/home/demouser/node_apps/chefmatedemo_api/.npmrc
+5 silly config load:file:/home/node/.npmrc
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm start
+8 verbose argv "start"
+9 verbose logfile logs-max:10 dir:/home/demouser/node_apps/chefmatedemo_api/_logs/2025-06-19T07_03_26_032Z-
+10 verbose logfile /home/demouser/node_apps/chefmatedemo_api/_logs/2025-06-19T07_03_26_032Z-debug-0.log
+11 silly logfile start cleaning logs, removing 1 files
+12 silly logfile done cleaning log files
+13 verbose stack Error: command failed
+13 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:22:22)
+13 verbose stack     at spawnWithShell (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:124:10)
+13 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:12:12)
+13 verbose stack     at runScriptPkg (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script-pkg.js:77:13)
+13 verbose stack     at runScript (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script.js:9:12)
+13 verbose stack     at #run (/usr/local/lib/node_modules/npm/lib/commands/run-script.js:130:13)
+13 verbose stack     at async RunScript.exec (/usr/local/lib/node_modules/npm/lib/commands/run-script.js:39:7)
+13 verbose stack     at async Npm.exec (/usr/local/lib/node_modules/npm/lib/npm.js:207:9)
+13 verbose stack     at async module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:74:5)
+14 verbose pkgid nodemypos@1.0.0
+15 error path /home/demouser/node_apps/chefmatedemo_api
+16 error command failed
+17 error signal SIGTERM
+18 error command sh -c nodemon server.js
+19 verbose cwd /home/demouser/node_apps/chefmatedemo_api
+20 verbose os Linux 6.1.0-17-amd64
+21 verbose node v20.19.2
+22 verbose npm  v10.8.2
+23 verbose exit 1
+24 verbose code 1
+25 error A complete log of this run can be found in: /home/demouser/node_apps/chefmatedemo_api/_logs/2025-06-19T07_03_26_032Z-debug-0.log

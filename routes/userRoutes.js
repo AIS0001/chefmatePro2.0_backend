@@ -48,6 +48,10 @@ router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAutho
 //View
 
 router.get('/checkline',auth.isAuthorize,viewcontroller.checklLineDiscount);
+router.get('/test', (req, res) => {
+  console.log("🟢 /test route hit");
+  res.json({ message: "Test route working" });
+});
 
 router.get('/fetchdata/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchData);
 router.get('/fetchdatanotequal/:tblname/:orderby/*',auth.isAuthorize,viewcontroller.fetchDatanotequal);
@@ -74,7 +78,7 @@ router.get('/getorderdetails/:table1/:table2',auth.isAuthorize,viewcontroller.ge
 
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
-router.put('/updatedata/:tablename',auth.isAuthorize,updatecontroller.updatedata);
+router.put('/updatedata/:tablename',updatecontroller.updatedata);
 router.put('/updatesubscription/:tablename/:id',auth.isAuthorize,updatecontroller.updateSubscription);
 
 //delete data 
