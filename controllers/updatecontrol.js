@@ -86,9 +86,9 @@ const updateCompanyInfo = async (req, res) => {
     const query = `UPDATE ?? SET ${fields} WHERE ?? = ?`;
     const [result] = await db.query(query, [table, ...values.slice(0, -1), col1, values[values.length - 1]]);
 
-    res.status(200).json({ msg: 'Company info updated' });
+    res.status(200).json({ msg: 'Data updated' });
   } catch (err) {
-    console.error('Company info update error:', err);
+    console.error('Data update error:', err);
     res.status(500).json({ msg: 'Failed to update company info', error: err });
   }
 };
@@ -163,7 +163,38 @@ const updatedata = async (req, res) => {
 };
 
 
+const updatecommondata = async (req, res) => {
+  try {
+    const table = req.params.tablename;
+    const col1 = req.params.col1;
+    const val1 = req.params.val1;
+    const updateData = req.body;
 
+    // Filter out undefined/null values
+    const filteredData = Object.fromEntries(
+      Object.entries(updateData).filter(([_, v]) => v !== undefined && v !== null)
+    );
+
+    if (Object.keys(filteredData).length === 0) {
+      return res.status(400).json({ msg: 'No valid data provided for update' });
+    }
+
+    const fields = Object.keys(filteredData).map(key => `${key} = ?`).join(", ");
+    const values = Object.values(filteredData);
+
+    const query = `UPDATE ?? SET ${fields} WHERE ?? = ?`;
+    const [result] = await db.query(query, [table, ...values, col1, val1]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ msg: 'Record not found' });
+    }
+
+    res.status(200).json({ msg: 'Data updated', affectedRows: result.affectedRows });
+  } catch (err) {
+    console.error('Data update error:', err);
+    res.status(500).json({ msg: 'Failed to update data', error: err.message });
+  }
+};
 
 
 
@@ -174,5 +205,6 @@ module.exports = {
   updateStatus1,
   updateCompanyInfo,
   updatedata,
-  updateSubscription
+  updateSubscription,
+  updatecommondata
 }

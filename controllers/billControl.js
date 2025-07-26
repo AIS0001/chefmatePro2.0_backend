@@ -26,7 +26,7 @@ const savebill = async (req, res) => {
         VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
       `;
 
-    //console.log('Executing Query:', billQuery);
+    console.log('Executing Query:', billQuery);
 
     const [billResult] = await connection.execute(
       billQuery,

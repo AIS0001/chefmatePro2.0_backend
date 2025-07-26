@@ -132,11 +132,251 @@ const getLowStockAlerts = (req, res) => {
     });
 };
 
+// GET WEEKLY SALES DATA
+const getWeeklySales = async (req, res) => {
+  try {
+    const query = `
+      SELECT YEAR(inv_date) AS year, WEEK(inv_date, 1) AS week, 
+             MIN(inv_date) AS week_start, MAX(inv_date) AS week_end,
+             SUM(grand_total) AS total_sales, COUNT(*) AS bill_count
+      FROM final_bill
+      GROUP BY YEAR(inv_date), WEEK(inv_date, 1)
+      ORDER BY year DESC, week DESC
+    `;
+    const [results] = await db.query(query);
+    res.json(results);
+  } catch (err) {
+    console.error("Error fetching weekly sales data:", err);
+    res.status(500).json({ error: "Failed to fetch weekly sales data", details: err.message });
+  }
+};
+
+// GET MONTHLY SALES DATA
+const getMonthlySales = async (req, res) => {
+  try {
+    const query = `
+      SELECT YEAR(inv_date) AS year, MONTH(inv_date) AS month,
+             MIN(inv_date) AS month_start, MAX(inv_date) AS month_end,
+             SUM(grand_total) AS total_sales, COUNT(*) AS bill_count
+      FROM final_bill
+      GROUP BY YEAR(inv_date), MONTH(inv_date)
+      ORDER BY year DESC, month DESC
+    `;
+    const [results] = await db.query(query);
+    res.json(results);
+  } catch (err) {
+    console.error("Error fetching monthly sales data:", err);
+    res.status(500).json({ error: "Failed to fetch monthly sales data", details: err.message });
+  }
+};
+
+// GET WEEKLY PURCHASE DATA (Current Week Only)
+const getWeeklyPurchase = async (req, res) => {
+  try {
+    const query = `
+      SELECT DATE(MIN(created_at)) AS week_start, DATE(MAX(created_at)) AS week_end,
+             YEAR(created_at) AS year, WEEK(created_at, 1) AS week,
+             SUM(netAmount) AS total_purchase, COUNT(*) AS purchase_count
+      FROM inventory
+      WHERE YEAR(created_at) = YEAR(CURDATE()) 
+        AND WEEK(created_at, 1) = WEEK(CURDATE(), 1)
+      GROUP BY YEAR(created_at), WEEK(created_at, 1)
+    `;
+    const [results] = await db.query(query);
+    
+    // If no data for current week, return zero values
+    if (results.length === 0) {
+      const currentDate = new Date();
+      const startOfWeek = new Date(currentDate.setDate(currentDate.getDate() - currentDate.getDay() + 1));
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      
+      return res.json([{
+        week_start: startOfWeek.toISOString().split('T')[0],
+        week_end: endOfWeek.toISOString().split('T')[0],
+        amount: 0,
+        purchase_count: 0
+      }]);
+    }
+    
+    // For graph chart, return week_start, week_end, total_purchase
+    res.json(results.map(row => ({
+      week_start: row.week_start,
+      week_end: row.week_end,
+      amount: row.total_purchase,
+      purchase_count: row.purchase_count
+    })));
+  } catch (err) {
+    console.error("Error fetching weekly purchase data:", err);
+    res.status(500).json({ error: "Failed to fetch weekly purchase data", details: err.message });
+  }
+};
+
+// GET MONTHLY PURCHASE DATA (Current Month Only)
+const getMonthlyPurchase = async (req, res) => {
+  try {
+    const query = `
+      SELECT YEAR(created_at) AS year, MONTH(created_at) AS month,
+             MIN(created_at) AS month_start, MAX(created_at) AS month_end,
+             SUM(netAmount) AS total_purchase, COUNT(*) AS purchase_count
+      FROM inventory
+      WHERE YEAR(created_at) = YEAR(CURDATE()) 
+        AND MONTH(created_at) = MONTH(CURDATE())
+      GROUP BY YEAR(created_at), MONTH(created_at)
+    `;
+    const [results] = await db.query(query);
+    
+    // If no data for current month, return zero values
+    if (results.length === 0) {
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      return res.json([{
+        year: currentDate.getFullYear(),
+        month: currentDate.getMonth() + 1,
+        month_start: startOfMonth.toISOString().split('T')[0],
+        month_end: endOfMonth.toISOString().split('T')[0],
+        total_purchase: 0,
+        purchase_count: 0
+      }]);
+    }
+    
+    res.json(results);
+  } catch (err) {
+    console.error("Error fetching monthly purchase data:", err);
+    res.status(500).json({ error: "Failed to fetch monthly purchase data", details: err.message });
+  }
+};
+
+// GET WEEKLY SUMMARY DATA (Current Week Only)
+const getWeeklySummary = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        YEAR(fb.inv_date) AS year, 
+        WEEK(fb.inv_date, 1) AS week,
+        MIN(fb.inv_date) AS week_start, 
+        MAX(fb.inv_date) AS week_end,
+        SUM(fb.grand_total) AS total_sales,
+        COUNT(fb.id) AS bill_count,
+        COALESCE(p.total_purchase, 0) AS total_purchase,
+        COALESCE(p.purchase_count, 0) AS purchase_count,
+        (SUM(fb.grand_total) - COALESCE(p.total_purchase, 0)) AS profit
+      FROM final_bill fb
+      LEFT JOIN (
+        SELECT 
+          YEAR(created_at) AS year, 
+          WEEK(created_at, 1) AS week,
+          SUM(netAmount) AS total_purchase,
+          COUNT(*) AS purchase_count
+        FROM inventory
+        WHERE YEAR(created_at) = YEAR(CURDATE()) 
+          AND WEEK(created_at, 1) = WEEK(CURDATE(), 1)
+        GROUP BY YEAR(created_at), WEEK(created_at, 1)
+      ) p ON YEAR(fb.inv_date) = p.year AND WEEK(fb.inv_date, 1) = p.week
+      WHERE YEAR(fb.inv_date) = YEAR(CURDATE()) 
+        AND WEEK(fb.inv_date, 1) = WEEK(CURDATE(), 1)
+      GROUP BY YEAR(fb.inv_date), WEEK(fb.inv_date, 1)
+    `;
+    const [results] = await db.query(query);
+    
+    // If no data for current week, return zero values
+    if (results.length === 0) {
+      const currentDate = new Date();
+      const startOfWeek = new Date(currentDate.setDate(currentDate.getDate() - currentDate.getDay() + 1));
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      
+      return res.json([{
+        year: new Date().getFullYear(),
+        week: Math.ceil((new Date().getDate() - new Date().getDay() + 1) / 7),
+        week_start: startOfWeek.toISOString().split('T')[0],
+        week_end: endOfWeek.toISOString().split('T')[0],
+        total_sales: 0,
+        bill_count: 0,
+        total_purchase: 0,
+        purchase_count: 0,
+        profit: 0
+      }]);
+    }
+    
+    res.json(results);
+  } catch (err) {
+    console.error("Error fetching weekly summary data:", err);
+    res.status(500).json({ error: "Failed to fetch weekly summary data", details: err.message });
+  }
+};
+
+// GET MONTHLY SUMMARY DATA (Current Month Only)
+const getMonthlySummary = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        YEAR(fb.inv_date) AS year, 
+        MONTH(fb.inv_date) AS month,
+        MIN(fb.inv_date) AS month_start, 
+        MAX(fb.inv_date) AS month_end,
+        SUM(fb.grand_total) AS total_sales,
+        COUNT(fb.id) AS bill_count,
+        COALESCE(p.total_purchase, 0) AS total_purchase,
+        COALESCE(p.purchase_count, 0) AS purchase_count,
+        (SUM(fb.grand_total) - COALESCE(p.total_purchase, 0)) AS profit
+      FROM final_bill fb
+      LEFT JOIN (
+        SELECT 
+          YEAR(created_at) AS year, 
+          MONTH(created_at) AS month,
+          SUM(netAmount) AS total_purchase,
+          COUNT(*) AS purchase_count
+        FROM inventory
+        WHERE YEAR(created_at) = YEAR(CURDATE()) 
+          AND MONTH(created_at) = MONTH(CURDATE())
+        GROUP BY YEAR(created_at), MONTH(created_at)
+      ) p ON YEAR(fb.inv_date) = p.year AND MONTH(fb.inv_date) = p.month
+      WHERE YEAR(fb.inv_date) = YEAR(CURDATE()) 
+        AND MONTH(fb.inv_date) = MONTH(CURDATE())
+      GROUP BY YEAR(fb.inv_date), MONTH(fb.inv_date)
+    `;
+    const [results] = await db.query(query);
+    
+    // If no data for current month, return zero values
+    if (results.length === 0) {
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      return res.json([{
+        year: currentDate.getFullYear(),
+        month: currentDate.getMonth() + 1,
+        month_start: startOfMonth.toISOString().split('T')[0],
+        month_end: endOfMonth.toISOString().split('T')[0],
+        total_sales: 0,
+        bill_count: 0,
+        total_purchase: 0,
+        purchase_count: 0,
+        profit: 0
+      }]);
+    }
+    
+    res.json(results);
+  } catch (err) {
+    console.error("Error fetching monthly summary data:", err);
+    res.status(500).json({ error: "Failed to fetch monthly summary data", details: err.message });
+  }
+};
+
 module.exports = {
   getSales,
   getPurchase,
   getSummary,
   todaysalepurchase,
   getLowStockAlerts,
-  getTopProducts
+  getTopProducts,
+  getWeeklySales,
+  getMonthlySales,
+  getWeeklyPurchase,
+  getMonthlyPurchase,
+  getWeeklySummary,
+  getMonthlySummary
 };
