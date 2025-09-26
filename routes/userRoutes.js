@@ -31,6 +31,7 @@ router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/allusers',auth.isAuthorize,viewcontroller.allUsers);
+router.get('/getlatestrecord/:tablename',auth.isAuthorize,viewcontroller.getLatestRecord);
 
 router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 router.get('/test', (req, res) => {
@@ -64,12 +65,13 @@ router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAut
 
 router.get('/getoutstandingbalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
 router.get('/getoutstandingbalance/:ac_type/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
-router.get('/getclosingstock/:item_id', auth.isAuthorize, ...protectFeature('inventory'), viewcontroller.getInventoryClosingStock);
+router.get('/getclosingstock/:item_id', auth.isAuthorize, viewcontroller.getInventoryClosingStock);
 // routes/userroutes.js
-router.get("/inventory/joined", auth.isAuthorize, ...protectFeature('inventory'), viewcontroller.getInventoryWithItems);
+router.get("/inventory/joined", auth.isAuthorize, viewcontroller.getInventoryWithItems);
 router.get("/checkledgerentry/:refno", auth.isAuthorize, viewcontroller.checkledgerentry);
 router.get("/getinvoiceitems/:refno", auth.isAuthorize, viewcontroller.getinvoiceitems);
 router.get("/order_items_gst_joined", auth.isAuthorize, viewcontroller.getOrderItemsGstJoined);
+router.get("/order_items_vat_joined", auth.isAuthorize, viewcontroller.getOrderItemsJoined);
 
 
 //Get
@@ -84,7 +86,6 @@ router.put('/updatedata/:tablename',updatecontroller.updatedata);
 router.put('/updatesubscription/:tablename/:id',auth.isAuthorize,updatecontroller.updateSubscription);
 router.put('/updatecompanyinfo/',auth.isAuthorize,updatecontroller.updateCompanyInfo);
 router.put('/updatecommondata/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updatecommondata);
-
 //delete data 
 router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);
 

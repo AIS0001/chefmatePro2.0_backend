@@ -23,7 +23,7 @@ const bodyParser = require('body-parser');
 const userRouters = require('./routes/userRoutes.js');
 const dashboardRouters = require('./routes/dashboardRoutes.js');
 const printRouters = require('./routes/printRoutes.js');
-// Use Print Routes
+const analyticsRouters = require('./routes/analyticsRoutes.js');
 
 
 require('./config/dbconnection');
@@ -45,6 +45,7 @@ app.use((err, req, res, next) => {
 app.use('/api', userRouters);
 app.use('/api', printRouters);
 app.use('/api', dashboardRouters);
+app.use('/api/analytics', analyticsRouters);
 
 //error handling
 app.use((err, req, res, next) => {
