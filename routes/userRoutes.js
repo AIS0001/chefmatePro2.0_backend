@@ -89,6 +89,12 @@ router.put('/updatecommondata/:tablename/:col1/:val1/',auth.isAuthorize,updateco
 //delete data 
 router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);
 
+// Delete item with associated images and files
+router.delete('/deleteitem/:id', auth.isAuthorize, deletecontroller.deleteItemById);
+
+// Bulk delete items with associated images and files
+router.post('/deleteitems/bulk', auth.isAuthorize, deletecontroller.deleteBulkItemsById);
+
 // Feature Control Routes
 router.get('/subscription', auth.isAuthorize, featureController.getUserSubscription);
 router.get('/features', auth.isAuthorize, featureController.getUserFeatures);
