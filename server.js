@@ -23,7 +23,7 @@ const bodyParser = require('body-parser');
 const userRouters = require('./routes/userRoutes.js');
 const dashboardRouters = require('./routes/dashboardRoutes.js');
 const printRouters = require('./routes/printRoutes.js');
-// Use Print Routes
+const analyticsRouters = require('./routes/analyticsRoutes.js');
 
 
 require('./config/dbconnection');
@@ -34,7 +34,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors({
+  origin: "https://pind.livecloudnet.com",  // allow only your frontend
+  credentials: true
+}));
 
 //app.use(cors());
 app.use((err, req, res, next) => {
@@ -45,6 +48,7 @@ app.use((err, req, res, next) => {
 app.use('/api', userRouters);
 app.use('/api', printRouters);
 app.use('/api', dashboardRouters);
+app.use('/api/analytics', analyticsRouters);
 
 //error handling
 app.use((err, req, res, next) => {
@@ -60,5 +64,5 @@ app.use(errorHandlerMiddleware);
 
 const PORT = process.env.PORT || 4402;
 app.listen(PORT, () => console.log(`Server connected at port ${PORT}`));
-//app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+// app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 
