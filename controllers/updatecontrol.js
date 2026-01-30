@@ -20,7 +20,7 @@ const updateDataPara1 = async (req, res) => {
     const [result] = await db.query(query, values);
     res.status(200).json({ msg: 'Password updated successfully' });
   } catch (err) {
-    console.error('Password update error:', err);
+    // console.error('Password update error:', err);
     res.status(500).json({ msg: 'Failed to update password', error: err });
   }
 };
@@ -36,7 +36,7 @@ const updateStatus = async (req, res) => {
 
     res.status(200).json({ msg: 'Status updated to paid' });
   } catch (err) {
-    console.error('Status update error:', err);
+    // console.error('Status update error:', err);
     res.status(500).json({ msg: 'Failed to update status', error: err });
   }
 };
@@ -54,7 +54,7 @@ const updateStatus1 = async (req, res) => {
 
     res.status(200).json({ msg: 'Payment mode updated' });
   } catch (err) {
-    console.error('Payment mode update error:', err);
+    // console.error('Payment mode update error:', err);
     res.status(500).json({ msg: 'Failed to update payment mode', error: err });
   }
 };
@@ -88,7 +88,7 @@ const updateCompanyInfo = async (req, res) => {
 
     res.status(200).json({ msg: 'Data updated' });
   } catch (err) {
-    console.error('Data update error:', err);
+    // console.error('Data update error:', err);
     res.status(500).json({ msg: 'Failed to update company info', error: err });
   }
 };
@@ -110,21 +110,21 @@ const updateSubscription = async (req, res) => {
 
     res.status(200).json({ msg: "Subscription updated successfully" });
   } catch (err) {
-    console.error("Subscription update error:", err);
+    // console.error("Subscription update error:", err);
     res.status(500).json({ msg: "Database error", error: err });
   }
 };
 
 const updatedata = async (req, res) => {
-  console.log("✅ Entered updatedata function");
+  // console.log("✅ Entered updatedata function");
   try {
     const table = req.params.tablename;
     const { updatedFields, where } = req.body;
 
-    console.log("🟢 req body:", req.body);
-    console.log("🟢 Updating table:", table);
-    console.log("🟢 updatedFields:", updatedFields);
-    console.log("🟢 where:", where);
+    // console.log("🟢 req body:", req.body);
+    // console.log("🟢 Updating table:", table);
+    // console.log("🟢 updatedFields:", updatedFields);
+    // console.log("🟢 where:", where);
 
     if (!updatedFields || typeof updatedFields !== "object" || Object.keys(updatedFields).length === 0) {
       return res.status(400).json({ success: false, message: "'updatedFields' must be provided and not empty" });
@@ -146,7 +146,7 @@ const updatedata = async (req, res) => {
 
     // Format query for debugging
     const formattedQuery = format(query, [table, ...setValues, ...whereValues]);
-    console.log("🟠 Formatted Query:", formattedQuery);
+    // console.log("🟠 Formatted Query:", formattedQuery);
 
     // Execute the query
     const [result] = await db.query(query, [table, ...setValues, ...whereValues]);
@@ -157,7 +157,7 @@ const updatedata = async (req, res) => {
       res.status(404).json({ success: false, message: "Data not found" });
     }
   } catch (err) {
-    console.error("❌ Unexpected error:", err);
+    // console.error("❌ Unexpected error:", err);
     res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
   }
 };
@@ -191,7 +191,7 @@ const updatecommondata = async (req, res) => {
 
     res.status(200).json({ msg: 'Data updated', affectedRows: result.affectedRows });
   } catch (err) {
-    console.error('Data update error:', err);
+    // console.error('Data update error:', err);
     res.status(500).json({ msg: 'Failed to update data', error: err.message });
   }
 };

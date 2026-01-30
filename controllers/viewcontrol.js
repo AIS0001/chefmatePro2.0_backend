@@ -93,7 +93,7 @@ const fetchData = async (req, res) => {
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
     const query = `SELECT * FROM ?? ${whereClause} ORDER BY ??`;
     const formattedQuery = format(query, [tblname, ...values, orderby]);
-console.log(formattedQuery);
+//console.log(formattedQuery);
     const [results] = await db.query(formattedQuery);
     res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: results });
   } catch (err) {
@@ -148,7 +148,7 @@ const fetchDataFromTwoTables = async (req, res) => {
     if (orderby) {
       query += ` ORDER BY ${orderby}`;
     }
-
+    
     console.log("SQL Query:", query);
 
     const [results] = await db.query(query);
@@ -331,12 +331,34 @@ const getOrderItemsGstJoined = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch joined order items GST data" });
   }
 };
+const getOrderItemsJoined = async (req, res) => {
+  const query = `
+    SELECT 
+      o.*, 
+      i.iname, 
+      i.catid, 
+      i.subcatid,
+      c.name AS category_name, 
+      s.subcat AS subcategory_name
+    FROM 
+      order_items o
+    JOIN 
+      items i ON TRIM(LOWER(o.item_name)) = TRIM(LOWER(i.iname))
+    LEFT JOIN 
+      categories c ON i.catid = c.id
+    LEFT JOIN 
+      subcategory s ON i.subcatid = s.id
+    ORDER BY 
+      o.id DESC
+  `;
 
-module.exports = {
-  getOrderDetailsWithSubtotals,
-  checkledgerentry,
-  checklLineDiscount,
-  getOrderItemsGstJoined
+  try {
+    const [results] = await db.query(query);
+    res.json(results);
+  } catch (err) {
+    console.error("JOIN query error:", err);
+    res.status(500).json({ error: "Failed to fetch joined order items GST data" });
+  }
 };
 
 
@@ -368,7 +390,7 @@ const getInventoryWithItems = async (req, res) => {
         items ON inventory.item_id = items.id
       ORDER BY inventory.id DESC
     `;
-
+ console.log(query);
     const [results] = await db.query(query);
     res.json(results);
   } catch (err) {
@@ -391,9 +413,91 @@ const getinvoiceitems = async (req, res) => {
 };
 
 
+// ...existing code...
 
+const getLatestRecord = async (req, res) => {
+  try {
+    const authToken = req.headers.authorization.split(' ')[1];
+    jwt.verify(authToken, jwt_secret);
+    
+    const table = req.params.tablename;
+    const query = format(`SELECT * FROM ?? ORDER BY id DESC LIMIT 1`, [table]);
+    
+    console.log('Latest Record Query:', query);
+    
+    const [result] = await db.query(query);
+    
+    if (result.length === 0) {
+      return res.status(404).send({ 
+        success: false, 
+        message: 'No records found in the table',
+        data: null 
+      });
+    }
+    
+    let latestRecord = result[0];
+    
+    // Check if quotation_number exists and increment it
+    if (latestRecord.quotation_number) {
+      // Extract the numeric part from quotation_number (e.g., QUO-2025-0001 -> 0001)
+      const quotationMatch = latestRecord.quotation_number.match(/(\d+)$/);
+      if (quotationMatch) {
+        const currentNumber = parseInt(quotationMatch[1]);
+        const nextNumber = (currentNumber + 1).toString().padStart(4, '0');
+        const year = new Date().getFullYear();
+        const nextQuotationNumber = `QUO-${year}-${nextNumber}`;
+        
+        latestRecord = {
+          ...latestRecord,
+          next_quotation_number: nextQuotationNumber
+        };
+      }
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      data: latestRecord, 
+      message: 'Latest record fetched successfully' 
+    });
+  } catch (err) {
+    console.error('Error in getLatestRecord:', err);
+    res.status(500).send({ 
+      success: false, 
+      message: 'Internal Server Error',
+      error: err.message 
+    });
+  }
+};
 
+const getNextItemCode = async (req, res) => {
+  try {
+    const authToken = req.headers.authorization.split(' ')[1];
+    jwt.verify(authToken, jwt_secret);
+    
+    const query = `SELECT MAX(item_code) as max_item_code FROM items`;
+    const [result] = await db.query(query);
+    
+    let nextItemCode = 1;
+    if (result && result.length > 0 && result[0].max_item_code !== null) {
+      nextItemCode = parseInt(result[0].max_item_code) + 1;
+    }
+    
+    res.status(200).send({ 
+      success: true, 
+      data: { next_item_code: nextItemCode }, 
+      message: 'Next item code fetched successfully' 
+    });
+  } catch (err) {
+    console.error('Error in getNextItemCode:', err);
+    res.status(500).send({ 
+      success: false, 
+      message: 'Internal Server Error',
+      error: err.message 
+    });
+  }
+};
 
+// ...existing code...
 
 module.exports = {
   getMaxOrderNumber,
@@ -412,6 +516,11 @@ module.exports = {
   getinvoiceitems,
   checklLineDiscount,
   getOrderItemsGstJoined,
+  getOrderItemsJoined,
   fetchDatanotequal,
-
+  getLatestRecord,
+  getNextItemCode,
 }
+
+
+

@@ -1,0 +1,83 @@
+Process should work fine - exit status - 0
+---------------------
+time="2025-09-27T17:25:18+07:00" level=warning msg="/var/dc-node-files/tripapi.livecloudnet.com_3d8c8c09fcff43524a69.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Network dc-node-files_rnet-n-user1-3d8c8c09fcff43524a69  Creating
+ Network dc-node-files_rnet-n-user1-3d8c8c09fcff43524a69  Created
+time="2025-09-27T17:25:19+07:00" level=warning msg="Found orphan containers ([dc-node-files-redis-n-user1-adcc0ca63b891b9825af-1 dc-node-files-node-user1-adcc0ca63b891b9825af-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container dc-node-files-node-user1-3d8c8c09fcff43524a69-1  Creating
+ Container dc-node-files-redis-n-user1-3d8c8c09fcff43524a69-1  Creating
+ Container dc-node-files-redis-n-user1-3d8c8c09fcff43524a69-1  Created
+ Container dc-node-files-node-user1-3d8c8c09fcff43524a69-1  Created
+Attaching to node-user1-3d8c8c09fcff43524a69-1, redis-n-user1-3d8c8c09fcff43524a69-1
+redis-n-user1-3d8c8c09fcff43524a69-1  | Starting Redis Server
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:C 27 Sep 2025 10:25:20.023 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:C 27 Sep 2025 10:25:20.023 * Redis version=8.2.1, bits=64, commit=00000000, modified=1, pid=1, just started
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:C 27 Sep 2025 10:25:20.023 * Configuration loaded
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.024 * monotonic clock: POSIX clock_gettime
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.028 * Running mode=standalone, port=6379.
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.033 * <bf> RedisBloom version 8.2.0 (Git=unknown)
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.033 * <bf> Registering configuration options: [
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.033 * <bf> 	{ bf-error-rate       :      0.01 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ bf-initial-size     :       100 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ bf-expansion-factor :         2 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ cf-bucket-size      :         2 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ cf-initial-size     :      1024 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ cf-max-iterations   :        20 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ cf-expansion-factor :         1 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> 	{ cf-max-expansions   :        32 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.034 * <bf> ]
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.035 * Module 'bf' loaded from /usr/local/lib/redis/modules//redisbloom.so
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.059 * <search> Redis version found by RedisSearch : 8.2.1 - oss
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.059 * <search> RediSearch version 8.2.1 (Git=dba8dd0)
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.059 * <search> Low level api version 1 initialized successfully
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.059 * <search> gc: ON, prefix min length: 2, min word length to stem: 4, prefix max expansions: 200, query timeout (ms): 500, timeout policy: return, cursor read size: 1000, cursor max idle (ms): 300000, max doctable size: 1000000, max number of search results:  1000000, 
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Initialized thread pools!
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Disabled workers threadpool of size 0
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Subscribe to config changes
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Enabled role change notification
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Cluster configuration: AUTO partitions, type: 0, coordinator timeout: 0ms
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * <search> Register write commands
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.060 * Module 'search' loaded from /usr/local/lib/redis/modules//redisearch.so
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> RedisTimeSeries version 80200, git_sha=1439d4a439ca9c063e6ef124a510abff09a5d493
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> Redis version found by RedisTimeSeries : 8.2.1 - oss
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> Registering configuration options: [
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-compaction-policy   :              }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-num-threads         :            3 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-retention-policy    :            0 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-duplicate-policy    :        block }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-chunk-size-bytes    :         4096 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-encoding            :   compressed }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-ignore-max-time-diff:            0 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> 	{ ts-ignore-max-val-diff :     0.000000 }
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> ]
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.061 * <timeseries> Detected redis oss
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.063 * <timeseries> Enabled diskless replication
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.063 * Module 'timeseries' loaded from /usr/local/lib/redis/modules//redistimeseries.so
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Created new data type 'ReJSON-RL'
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> version: 80200 git sha: unknown branch: unknown
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Exported RedisJSON_V1 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Exported RedisJSON_V2 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Exported RedisJSON_V3 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Exported RedisJSON_V4 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Exported RedisJSON_V5 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Enabled diskless replication
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.065 * <ReJSON> Initialized shared string cache, thread safe: false.
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.066 * Module 'ReJSON' loaded from /usr/local/lib/redis/modules//rejson.so
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.066 * <search> Acquired RedisJSON_V5 API
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.066 * Server initialized
+redis-n-user1-3d8c8c09fcff43524a69-1  | 1:M 27 Sep 2025 10:25:20.066 * Ready to accept connections tcp
+node-user1-3d8c8c09fcff43524a69-1     | 
+node-user1-3d8c8c09fcff43524a69-1     | > nodemypos@1.0.0 start
+node-user1-3d8c8c09fcff43524a69-1     | > nodemon server.js
+node-user1-3d8c8c09fcff43524a69-1     | 
+node-user1-3d8c8c09fcff43524a69-1     | [33m[nodemon] 3.1.4[39m
+node-user1-3d8c8c09fcff43524a69-1     | [33m[nodemon] to restart at any time, enter `rs`[39m
+node-user1-3d8c8c09fcff43524a69-1     | [33m[nodemon] watching path(s): *.*[39m
+node-user1-3d8c8c09fcff43524a69-1     | [33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+node-user1-3d8c8c09fcff43524a69-1     | [32m[nodemon] starting `node server.js`[39m
+node-user1-3d8c8c09fcff43524a69-1     | local server connected at port 40001
+node-user1-3d8c8c09fcff43524a69-1     | klook Database Connected db connection1
+node-user1-3d8c8c09fcff43524a69-1     | Database connected successfully!
+Gracefully Stopping... press Ctrl+C again to force
+ Container dc-node-files-node-user1-3d8c8c09fcff43524a69-1  Stopping
+ Container dc-node-files-redis-n-user1-3d8c8c09fcff43524a69-1  Stopping

@@ -14,7 +14,7 @@ const savebill = async (req, res) => {
   try {
     await connection.beginTransaction(); // Start transaction
 
-    const { customer_id, tablenumber, subtotal, subtotal_afterdiscount, tax, discount_type, discount_value, round_off, grand_total, payment_mode, status } = req.body;
+    const { customer_id, tablenumber, subtotal, subtotal_afterdiscount, tax, discount_type, discount_value, round_off, grand_total, payment_mode, status, setup_date } = req.body;
 
     // Calculate discount amount
     let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
@@ -22,15 +22,15 @@ const savebill = async (req, res) => {
 
     // Insert Bill into `final_bill`
     const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status)
-        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
+        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
+        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
       `;
 
     console.log('Executing Query:', billQuery);
 
     const [billResult] = await connection.execute(
       billQuery,
-      [customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status]
+      [customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
     );
 
     const bill_id = billResult.insertId; // Get the final bill ID
@@ -53,16 +53,16 @@ const savebill = async (req, res) => {
     ];
 
     if (payment_mode === "Cash") {
-      ledgerEntries.push([transaction_id, new Date(), "Cash", "NULL", `Bill #${bill_id} - Cash Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Cash", null, `Bill #${bill_id} - Cash Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Bank Transfer") {
-      ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", "NULL", `Bill #${bill_id} - Bank Transfer Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", null, `Bill #${bill_id} - Bank Transfer Payment`, grand_total, 0.00, "NULL"]);
     }
-    else if (payment_mode === "QR Code") {
-      ledgerEntries.push([transaction_id, new Date(), "QR Code", "NULL", `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
+    else if (payment_mode === "QR Code" || payment_mode === "QR Scan") {
+      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "UPI") {
-      ledgerEntries.push([transaction_id, new Date(), "UPI", "NULL", `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Credit") {
       ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, "NULL"]);
@@ -112,6 +112,96 @@ const savebill = async (req, res) => {
     connection.release(); // Release the connection back to the pool
   }
 };
+const kiosksavebill = async (req, res) => {
+  const connection = await db.getConnection(); // Get a connection from the pool
+
+  try {
+    await connection.beginTransaction(); // Start transaction
+
+    let { tablenumber, subtotal, subtotal_afterdiscount, tax, discount_type, discount_value, round_off, grand_total, payment_mode, status, setup_date } = req.body;
+
+    // Validate payment mode for kiosk (only QR Code or Card)
+    if (!payment_mode || (payment_mode !== "QR Code" && payment_mode !== "QR Scan" && payment_mode !== "Card")) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: "Invalid payment mode. Only 'QR Code', 'QR Scan', or 'Card' are allowed for kiosk." });
+    }
+
+    // For kiosk, ALWAYS use NULL customer_id (guest/walk-in customers only)
+    const customer_id = null;
+
+    // Calculate discount amount
+    let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
+    let net_total = subtotal + tax - discount_amount + round_off;
+
+    // Insert Bill into `final_bill` - customer_id can be NULL for walk-in customers
+    const billQuery = `
+        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
+        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
+      `;
+
+    console.log('Executing Query:', billQuery);
+
+    const [billResult] = await connection.execute(
+      billQuery,
+      [customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
+    );
+
+    const bill_id = billResult.insertId; // Get the final bill ID
+    if (!bill_id) throw new Error("Bill ID not generated");
+
+    // Use `bill_id` as `transaction_id`
+    const transaction_id = bill_id;
+
+    // Generate next queue number for today (lock rows for today to avoid race)
+    const [qRows] = await connection.query(
+      `SELECT IFNULL(MAX(queue_number), 0) AS max_no
+       FROM kiosk_queue
+       WHERE queue_date = CURDATE()
+       FOR UPDATE`
+    );
+    const nextQueueNo = (qRows && qRows[0] && qRows[0].max_no ? qRows[0].max_no : 0) + 1;
+
+    // Insert queue record
+    await connection.execute(
+      `INSERT INTO kiosk_queue (bill_id, queue_number, queue_date, status)
+       VALUES (?, ?, CURDATE(), 'waiting')`,
+      [bill_id, nextQueueNo]
+    );
+
+    // Default account IDs (adjust as needed)
+    const sales_account_id = 1; // Sales Account
+
+    // Create Ledger Entries - Only QR Code or Card
+    let ledgerEntries = [
+      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sale Revenue`, 0.00, grand_total, "NULL"]
+    ];
+
+    if (payment_mode === "QR Code" || payment_mode === "QR Scan") {
+      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
+    }
+    else if (payment_mode === "Card") {
+      ledgerEntries.push([transaction_id, new Date(), "Card", null, `Bill #${bill_id} - Card Payment`, grand_total, 0.00, "NULL"]);
+    }
+
+    // Insert into `ledger_entries`
+    const ledgerQuery = `
+        INSERT INTO ledger_entries (transaction_id, date, account_type, account_id, description, debit_amount, credit_amount, reference_id)
+        VALUES ?
+      `;
+
+    await connection.query(ledgerQuery, [ledgerEntries]);
+
+    await connection.commit(); // Commit transaction
+    res.status(201).json({ success: true, message: "Bill & Queue saved successfully!", bill_id, queue_number: nextQueueNo });
+
+  } catch (error) {
+    await connection.rollback(); // Rollback on error
+    console.error("Error saving bill:", error);
+    res.status(500).json({ success: false, message: "Error saving bill", error });
+  } finally {
+    connection.release(); // Release the connection back to the pool
+  }
+};
 const advancesavebill = async (req, res) => {
   const connection = await db.getConnection(); // Get a connection from the pool
 
@@ -138,6 +228,7 @@ const advancesavebill = async (req, res) => {
       bill_generated_by,
       final_billed,
       paid_amount,
+      setup_date,
     } = req.body;
 
     // Insert into `final_bill`
@@ -148,10 +239,10 @@ const advancesavebill = async (req, res) => {
         subtotal_afterdiscount, tax, roundoff, grand_total,
         payment_mode, status, pickup_date, pickup_time,
         special_note, order_type, bill_generated_by,
-        final_billed, paid_amount
+        final_billed, paid_amount, setup_date
       )
       VALUES (
-        ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `;
 
@@ -176,7 +267,8 @@ const advancesavebill = async (req, res) => {
         order_type,
         bill_generated_by,
         final_billed,
-        paid_amount
+        paid_amount,
+        setup_date
       ]
     );
 
@@ -589,4 +681,4 @@ const getCustomerInvoices = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching invoices", error });
   }
 };
-module.exports = { savebill, advancesavebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices, saveSupplierPayment };
+module.exports = { savebill, kiosksavebill,advancesavebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices, saveSupplierPayment };

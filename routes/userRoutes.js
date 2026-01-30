@@ -9,8 +9,7 @@ const savebillController = require("../controllers/billControl");
 const deletecontroller = require("../controllers/deletecontrol");
 const viewcontroller = require("../controllers/viewcontrol");
 const updatecontroller = require("../controllers/updatecontrol");
-const featureController = require("../controllers/featureController");
-const { requireFeatureAccess, trackFeatureUsage, protectFeature } = require('../middleware/featureAccess');
+// const featureController = require("../controllers/featureController"); // Disabled
 const path = require('path');
 const multer = require('multer');
 
@@ -31,6 +30,8 @@ router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/allusers',auth.isAuthorize,viewcontroller.allUsers);
+router.get('/getlatestrecord/:tablename',auth.isAuthorize,viewcontroller.getLatestRecord);
+router.get('/getnextitemcode',auth.isAuthorize,viewcontroller.getNextItemCode);
 
 router.post('/upload_csv',auth.isAuthorize,insertcontroller.uploadcsv);
 router.get('/test', (req, res) => {
@@ -40,12 +41,13 @@ router.get('/test', (req, res) => {
 //Insert Data 
 router.post('/insertdata/:tablename',auth.isAuthorize,insertcontroller.insertdata);
 router.post('/savepayment',auth.isAuthorize,billcontroller.savePayment);
-router.post('/saveSupplierPayment',auth.isAuthorize, ...protectFeature('suppliers'), billcontroller.saveSupplierPayment);
+router.post('/saveSupplierPayment',auth.isAuthorize, billcontroller.saveSupplierPayment);
 router.post('/savebill',auth.isAuthorize,savebillController.savebill);
+router.post('/public/savebill',savebillController.kiosksavebill);
 router.post('/advancesavebill',auth.isAuthorize,savebillController.advancesavebill);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
 router.post('/insertdatabulkgst/:tablename',auth.isAuthorize,insertcontroller.insertdatabulkgst);
-router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, ...protectFeature('inventory'), insertcontroller.addNewProduct);
+router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
 
 //View
 
@@ -64,12 +66,13 @@ router.get('/fetchdatafromtwotables/:tbl1/:tbl2/:col1/:col2/:orderby',auth.isAut
 
 router.get('/getoutstandingbalance/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
 router.get('/getoutstandingbalance/:ac_type/:customer_id', auth.isAuthorize, billcontroller.getOutstandingBalance);
-router.get('/getclosingstock/:item_id', auth.isAuthorize, ...protectFeature('inventory'), viewcontroller.getInventoryClosingStock);
+router.get('/getclosingstock/:item_id', auth.isAuthorize, viewcontroller.getInventoryClosingStock);
 // routes/userroutes.js
-router.get("/inventory/joined", auth.isAuthorize, ...protectFeature('inventory'), viewcontroller.getInventoryWithItems);
+router.get("/inventory/joined", auth.isAuthorize, viewcontroller.getInventoryWithItems);
 router.get("/checkledgerentry/:refno", auth.isAuthorize, viewcontroller.checkledgerentry);
 router.get("/getinvoiceitems/:refno", auth.isAuthorize, viewcontroller.getinvoiceitems);
 router.get("/order_items_gst_joined", auth.isAuthorize, viewcontroller.getOrderItemsGstJoined);
+router.get("/order_items_vat_joined", auth.isAuthorize, viewcontroller.getOrderItemsJoined);
 
 
 //Get
@@ -84,25 +87,32 @@ router.put('/updatedata/:tablename',updatecontroller.updatedata);
 router.put('/updatesubscription/:tablename/:id',auth.isAuthorize,updatecontroller.updateSubscription);
 router.put('/updatecompanyinfo/',auth.isAuthorize,updatecontroller.updateCompanyInfo);
 router.put('/updatecommondata/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updatecommondata);
-
 //delete data 
 router.delete('/deletebyid/:tablename/:colname/:colval',auth.isAuthorize,deletecontroller.deletedatabyid);
 
-// Feature Control Routes
-router.get('/subscription', auth.isAuthorize, featureController.getUserSubscription);
-router.get('/features', auth.isAuthorize, featureController.getUserFeatures);
-router.get('/features/:featureCode/access', auth.isAuthorize, featureController.checkFeatureAccess);
-router.post('/features/:featureCode/usage', auth.isAuthorize, featureController.updateFeatureUsage);
-router.get('/features/:featureCode/usage', auth.isAuthorize, featureController.getFeatureUsage);
-router.get('/plans', auth.isAuthorize, featureController.getSubscriptionPlans);
-router.get('/plans/comparison', auth.isAuthorize, featureController.getPlanFeaturesComparison);
-router.post('/subscription/change', auth.isAuthorize, featureController.changeUserSubscription);
+// Delete item with associated images and files
+router.delete('/deleteitem/:id', auth.isAuthorize, deletecontroller.deleteItemById);
 
-// Example protected route using feature access middleware
-router.get('/protected/suppliers', 
-    auth.isAuthorize, 
-    featureController.checkFeatureAccessMiddleware('suppliers'), 
-    featureController.getProtectedSuppliers
-);
+// Bulk delete items with associated images and files
+router.post('/deleteitems/bulk', auth.isAuthorize, deletecontroller.deleteBulkItemsById);
+
+// Feature Control Routes - All disabled to remove subscription restrictions
+// router.get('/subscription', auth.isAuthorize, featureController.getUserSubscription);
+// router.get('/features', auth.isAuthorize, featureController.getUserFeatures);
+// Feature access routes disabled
+// router.get('/features/:featureCode/access', auth.isAuthorize, featureController.checkFeatureAccess);
+// Feature usage tracking routes disabled
+// router.post('/features/:featureCode/usage', auth.isAuthorize, featureController.updateFeatureUsage);
+// router.get('/features/:featureCode/usage', auth.isAuthorize, featureController.getFeatureUsage);
+// router.get('/plans', auth.isAuthorize, featureController.getSubscriptionPlans);
+// router.get('/plans/comparison', auth.isAuthorize, featureController.getPlanFeaturesComparison);
+// router.post('/subscription/change', auth.isAuthorize, featureController.changeUserSubscription);
+
+// Protected routes with feature access disabled
+// router.get('/protected/suppliers', 
+//     auth.isAuthorize, 
+//     featureController.checkFeatureAccessMiddleware('suppliers'), 
+//     featureController.getProtectedSuppliers
+// );
 
 module.exports=router
