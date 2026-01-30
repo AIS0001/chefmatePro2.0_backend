@@ -5,6 +5,7 @@
 
 const stockService = require('../services/stockService');
 const { validationResult } = require('express-validator');
+const { db, format } = require('../config/dbconnection');
 
 class StockController {
   /**
@@ -902,6 +903,89 @@ class StockController {
           summary,
           items: reportData
         }
+      });
+
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * Fetch product data for stock deduction verification
+   * GET /stock/fetchdata/:table/:column/:value
+   * Example: /stock/fetchdata/items/id/1
+   */
+  async fetchData(req, res) {
+    try {
+      const { table, column, value } = req.params;
+
+      // Validate inputs
+      if (!table || !column || !value) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required parameters: table, column, value'
+        });
+      }
+
+      // Whitelist allowed tables for security
+      const allowedTables = ['items', 'product_units', 'product_variants'];
+      if (!allowedTables.includes(table)) {
+        return res.status(400).json({
+          success: false,
+          message: `Table ${table} is not allowed`
+        });
+      }
+
+      // Build and execute query
+      const query = `SELECT * FROM ?? WHERE ?? = ?`;
+      const [results] = await db.query(query, [table, column, value]);
+
+      if (!results || results.length === 0) {
+        console.log(`❌ No record found in ${table} where ${column} = ${value}`);
+        return res.status(200).json({
+          success: false,
+          message: `No record found in ${table} where ${column} = ${value}`,
+          data: []
+        });
+      }
+
+      console.log(`✅ Found record in ${table} where ${column} = ${value}:`, results[0]);
+      res.status(200).json({
+        success: true,
+        message: 'Data fetched successfully',
+        data: results
+      });
+
+    } catch (error) {
+      console.error('Error in fetchData:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * Populate stock conversions for a product
+   * POST /api/stock/populate-conversions/:productId
+   */
+  async populateConversions(req, res) {
+    try {
+      const { productId } = req.params;
+
+      if (!productId) {
+        return res.status(400).json({ success: false, message: 'Product ID required' });
+      }
+
+      await stockService.populateStockConversions(productId);
+
+      res.json({
+        success: true,
+        message: 'Stock conversions populated successfully',
+        productId
       });
 
     } catch (error) {

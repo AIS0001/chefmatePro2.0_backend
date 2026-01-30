@@ -7,6 +7,58 @@ const { db } = require('../config/dbconnection');
 
 class StockService {
   /**
+   * Auto-populate stock conversions for a product
+   * Calculates conversion factors between all units of a product
+   * @param {number} productId - Product ID
+   */
+  async populateStockConversions(productId) {
+    try {
+      const connection = await db.getConnection();
+
+      try {
+        // Get all units for this product
+        const [units] = await connection.query(
+          'SELECT id, conversion_factor FROM product_units WHERE product_id = ? ORDER BY conversion_factor DESC',
+          [productId]
+        );
+
+        if (units.length < 2) return; // Need at least 2 units for conversions
+
+        // Create conversions between all pairs of units
+        for (let i = 0; i < units.length; i++) {
+          for (let j = 0; j < units.length; j++) {
+            if (i === j) continue;
+
+            const fromUnit = units[i];
+            const toUnit = units[j];
+            
+            // Conversion factor = fromUnit.conversion_factor / toUnit.conversion_factor
+            const conversionFactor = (fromUnit.conversion_factor / toUnit.conversion_factor).toFixed(4);
+
+            // Insert or update conversion
+            await connection.query(
+              `INSERT INTO stock_conversions (product_id, from_unit_id, to_unit_id, conversion_factor, is_active)
+               VALUES (?, ?, ?, ?, 1)
+               ON DUPLICATE KEY UPDATE 
+                 conversion_factor = VALUES(conversion_factor),
+                 is_active = 1`,
+              [productId, fromUnit.id, toUnit.id, conversionFactor]
+            );
+          }
+        }
+
+        connection.release();
+      } catch (error) {
+        connection.release();
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error populating stock conversions:', error.message);
+      // Don't throw - conversions are optional
+    }
+  }
+
+  /**
    * Add stock to inventory
    * @param {number} productId - Product/Item ID
    * @param {number} unitId - Unit ID to add
@@ -35,13 +87,25 @@ class StockService {
         }
 
         const [unitCheck] = await connection.query(
-          'SELECT id, unit_name, ml_capacity FROM product_units WHERE id = ? AND product_id = ?',
+          'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE id = ? AND product_id = ?',
           [unitId, productId]
         );
 
         if (unitCheck.length === 0) {
           throw new Error('Unit not found for this product');
         }
+
+        // Resolve base unit for ML conversion when ml_capacity is missing
+        const [baseUnitRows] = await connection.query(
+          'SELECT id, ml_capacity FROM product_units WHERE product_id = ? AND is_base_unit = 1 AND ml_capacity IS NOT NULL LIMIT 1',
+          [productId]
+        );
+
+        const baseUnit = baseUnitRows[0] || null;
+        const unitMlCapacity = unitCheck[0].ml_capacity ?? (baseUnit?.ml_capacity && unitCheck[0].conversion_factor
+          ? baseUnit.ml_capacity * unitCheck[0].conversion_factor
+          : null);
+        const totalMlAdded = unitMlCapacity ? quantity * unitMlCapacity : null;
 
         // Record transaction
         await connection.query(
@@ -57,11 +121,11 @@ class StockService {
             referenceId,
             userId,
             notes,
-            unitCheck[0].ml_capacity ? quantity * unitCheck[0].ml_capacity : null
+            totalMlAdded
           ]
         );
 
-        // Update or create stock balance
+        // Update or create stock balance for the added unit
         const [existingBalance] = await connection.query(
           'SELECT id, current_quantity FROM stock_balance WHERE product_id = ? AND unit_id = ?',
           [productId, unitId]
@@ -79,7 +143,52 @@ class StockService {
           );
         }
 
+        // Auto-update all other units based on ML conversion (for liquor products)
+        if (totalMlAdded) {
+          // Get all other units for this product
+          const [allUnits] = await connection.query(
+            'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE product_id = ? AND id != ?',
+            [productId, unitId]
+          );
+
+          // Update stock balance for each unit based on ML capacity
+          for (const unit of allUnits) {
+            const unitMl = unit.ml_capacity ?? (baseUnit?.ml_capacity && unit.conversion_factor
+              ? baseUnit.ml_capacity * unit.conversion_factor
+              : null);
+
+            if (!unitMl) {
+              continue;
+            }
+
+            const quantityInThisUnit = Math.floor(totalMlAdded / unitMl);
+            
+            if (quantityInThisUnit > 0) {
+              const [unitBalance] = await connection.query(
+                'SELECT id FROM stock_balance WHERE product_id = ? AND unit_id = ?',
+                [productId, unit.id]
+              );
+
+              if (unitBalance.length > 0) {
+                await connection.query(
+                  'UPDATE stock_balance SET current_quantity = current_quantity + ? WHERE product_id = ? AND unit_id = ?',
+                  [quantityInThisUnit, productId, unit.id]
+                );
+              } else {
+                await connection.query(
+                  'INSERT INTO stock_balance (product_id, unit_id, current_quantity) VALUES (?, ?, ?)',
+                  [productId, unit.id, quantityInThisUnit]
+                );
+              }
+            }
+          }
+        }
+
         await connection.commit();
+        connection.release();
+
+        // Populate stock conversions for this product (after transaction completes)
+        await this.populateStockConversions(productId);
 
         return {
           success: true,
@@ -127,11 +236,28 @@ class StockService {
           throw new Error(`Insufficient stock. Available: ${balance[0].available_quantity}, Required: ${quantity}`);
         }
 
+        // Get unit details for ML calculation
+        const [unitCheck] = await connection.query(
+          'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE id = ? AND product_id = ?',
+          [unitId, productId]
+        );
+
+        const [baseUnitRows] = await connection.query(
+          'SELECT id, ml_capacity FROM product_units WHERE product_id = ? AND is_base_unit = 1 AND ml_capacity IS NOT NULL LIMIT 1',
+          [productId]
+        );
+
+        const baseUnit = baseUnitRows[0] || null;
+        const unitMlCapacity = unitCheck[0]?.ml_capacity ?? (baseUnit?.ml_capacity && unitCheck[0]?.conversion_factor
+          ? baseUnit.ml_capacity * unitCheck[0].conversion_factor
+          : null);
+        const quantityInMl = unitMlCapacity ? quantity * unitMlCapacity : null;
+
         // Record transaction
         await connection.query(
           `INSERT INTO stock_transactions 
-           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             productId,
             'REMOVE',
@@ -140,15 +266,45 @@ class StockService {
             referenceType,
             referenceId,
             userId,
-            notes
+            notes,
+            quantityInMl
           ]
         );
 
-        // Deduct from stock balance
+        // Deduct from stock balance for the sold unit
         await connection.query(
           'UPDATE stock_balance SET current_quantity = current_quantity - ? WHERE product_id = ? AND unit_id = ?',
           [quantity, productId, unitId]
         );
+
+        // Auto-deduct from all other units based on ML conversion (for liquor products)
+        if (quantityInMl) {
+          // Get all other units for this product
+          const [allUnits] = await connection.query(
+            'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE product_id = ? AND id != ?',
+            [productId, unitId]
+          );
+
+          // Deduct from each unit based on ML capacity
+          for (const unit of allUnits) {
+            const unitMl = unit.ml_capacity ?? (baseUnit?.ml_capacity && unit.conversion_factor
+              ? baseUnit.ml_capacity * unit.conversion_factor
+              : null);
+
+            if (!unitMl) {
+              continue;
+            }
+
+            const quantityToDeduct = Math.floor(quantityInMl / unitMl);
+            
+            if (quantityToDeduct > 0) {
+              await connection.query(
+                'UPDATE stock_balance SET current_quantity = GREATEST(0, current_quantity - ?) WHERE product_id = ? AND unit_id = ?',
+                [quantityToDeduct, productId, unit.id]
+              );
+            }
+          }
+        }
 
         await connection.commit();
 

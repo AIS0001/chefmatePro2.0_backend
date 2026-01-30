@@ -445,4 +445,40 @@ router.get(
   stockController.getPurchaseReconciliationReport
 );
 
+/**
+ * UTILITY ENDPOINTS
+ */
+
+/**
+ * GET /api/stock/fetchdata/:table/:column/:value
+ * Fetch product data for stock deduction verification
+ * Example: GET /api/stock/fetchdata/items/id/1
+ */
+router.get(
+  '/fetchdata/:table/:column/:value',
+  [
+    param('table').isString().trim(),
+    param('column').isString().trim(),
+    param('value').notEmpty()
+  ],
+  stockController.fetchData
+);
+
+/**
+ * CONVERSION MANAGEMENT ENDPOINTS
+ */
+
+/**
+ * POST /api/stock/populate-conversions/:productId
+ * Populate stock conversions for a product (auto-calculate unit conversions)
+ * Example: POST /api/stock/populate-conversions/1
+ */
+router.post(
+  '/populate-conversions/:productId',
+  [
+    param('productId').isInt({ min: 1 }).withMessage('Product ID must be a positive integer')
+  ],
+  stockController.populateConversions
+);
+
 module.exports = router;
