@@ -213,7 +213,8 @@ class StockService {
 
   /**
    * Remove stock from inventory (for sales, waste, etc.)
-   * Intelligently removes from largest units first
+   * Intelligently removes from base units when serving units are requested
+   * For liquor: If customer orders 30ml peg, it deducts from full bottle stock
    */
   async removeStock(productId, unitId, quantity, userId, referenceType = 'SALE', referenceId = null, notes = '') {
     try {
@@ -222,38 +223,60 @@ class StockService {
       await connection.beginTransaction();
 
       try {
-        // Check if quantity is available
-        const [balance] = await connection.query(
-          'SELECT available_quantity FROM stock_balance WHERE product_id = ? AND unit_id = ?',
-          [productId, unitId]
-        );
-
-        if (balance.length === 0) {
-          throw new Error('No stock available for this unit');
-        }
-
-        if (balance[0].available_quantity < quantity) {
-          throw new Error(`Insufficient stock. Available: ${balance[0].available_quantity}, Required: ${quantity}`);
-        }
-
         // Get unit details for ML calculation
         const [unitCheck] = await connection.query(
           'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE id = ? AND product_id = ?',
           [unitId, productId]
         );
 
+        if (unitCheck.length === 0) {
+          throw new Error('Unit not found for this product');
+        }
+
+        const requestedUnit = unitCheck[0];
+
+        // Get base unit for this product
         const [baseUnitRows] = await connection.query(
           'SELECT id, ml_capacity FROM product_units WHERE product_id = ? AND is_base_unit = 1 AND ml_capacity IS NOT NULL LIMIT 1',
           [productId]
         );
 
         const baseUnit = baseUnitRows[0] || null;
-        const unitMlCapacity = unitCheck[0]?.ml_capacity ?? (baseUnit?.ml_capacity && unitCheck[0]?.conversion_factor
-          ? baseUnit.ml_capacity * unitCheck[0].conversion_factor
+        
+        // Calculate ML capacity of requested unit
+        const unitMlCapacity = requestedUnit.ml_capacity ?? (baseUnit?.ml_capacity && requestedUnit.conversion_factor
+          ? baseUnit.ml_capacity * requestedUnit.conversion_factor
           : null);
         const quantityInMl = unitMlCapacity ? quantity * unitMlCapacity : null;
 
-        // Record transaction
+        // Determine which unit to deduct from
+        let deductFromUnitId = unitId;
+        let quantityToDeduct = quantity;
+        let actualQuantityInMl = quantityInMl;
+
+        // If requested unit is NOT the base unit and has ML capacity, deduct from base unit instead
+        if (!requestedUnit.is_base_unit && baseUnit && quantityInMl) {
+          deductFromUnitId = baseUnit.id;
+          // Convert ML quantity to base unit quantity
+          quantityToDeduct = Math.ceil(quantityInMl / baseUnit.ml_capacity); // Ceiling to account for partial bottles
+          actualQuantityInMl = quantityInMl;
+        }
+
+        // Check if stock is available in the unit we're deducting from
+        const [balance] = await connection.query(
+          'SELECT available_quantity, current_quantity FROM stock_balance WHERE product_id = ? AND unit_id = ?',
+          [productId, deductFromUnitId]
+        );
+
+        if (balance.length === 0) {
+          throw new Error(`No stock available for ${requestedUnit.unit_name}. Base unit (${baseUnit?.unit_name || 'bottle'}) required.`);
+        }
+
+        if (balance[0].available_quantity < quantityToDeduct) {
+          throw new Error(`Insufficient stock. Available: ${balance[0].available_quantity}, Required: ${quantityToDeduct} ${baseUnit?.unit_name || 'units'}`);
+        }
+
+        // Record transaction with original requested unit and quantity
         await connection.query(
           `INSERT INTO stock_transactions 
            (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml)
@@ -267,43 +290,27 @@ class StockService {
             referenceId,
             userId,
             notes,
-            quantityInMl
+            actualQuantityInMl
           ]
         );
 
-        // Deduct from stock balance for the sold unit
+        // Deduct from the appropriate unit (base unit for serving units, or the requested unit itself)
         await connection.query(
           'UPDATE stock_balance SET current_quantity = current_quantity - ? WHERE product_id = ? AND unit_id = ?',
-          [quantity, productId, unitId]
+          [quantityToDeduct, productId, deductFromUnitId]
         );
 
-        // Auto-deduct from all other units based on ML conversion (for liquor products)
-        if (quantityInMl) {
-          // Get all other units for this product
-          const [allUnits] = await connection.query(
-            'SELECT id, unit_name, ml_capacity, conversion_factor, is_base_unit FROM product_units WHERE product_id = ? AND id != ?',
-            [productId, unitId]
+        // If deducting from base unit, don't auto-deduct from other units
+        // This prevents double deduction
+        if (deductFromUnitId === baseUnit?.id && quantityInMl) {
+          // Optional: Update serving unit balances if they exist as reference
+          const [servingUnits] = await connection.query(
+            'SELECT id, unit_name, ml_capacity FROM product_units WHERE product_id = ? AND is_base_unit = 0 AND ml_capacity IS NOT NULL',
+            [productId]
           );
 
-          // Deduct from each unit based on ML capacity
-          for (const unit of allUnits) {
-            const unitMl = unit.ml_capacity ?? (baseUnit?.ml_capacity && unit.conversion_factor
-              ? baseUnit.ml_capacity * unit.conversion_factor
-              : null);
-
-            if (!unitMl) {
-              continue;
-            }
-
-            const quantityToDeduct = Math.floor(quantityInMl / unitMl);
-            
-            if (quantityToDeduct > 0) {
-              await connection.query(
-                'UPDATE stock_balance SET current_quantity = GREATEST(0, current_quantity - ?) WHERE product_id = ? AND unit_id = ?',
-                [quantityToDeduct, productId, unit.id]
-              );
-            }
-          }
+          // Just for reference/logging - don't actually deduct from serving units since we deducted from base
+          // This maintains serving unit balances as informational only
         }
 
         await connection.commit();
@@ -314,6 +321,9 @@ class StockService {
           productId,
           unitId,
           quantity,
+          deductedFromUnit: deductFromUnitId,
+          deductedQuantity: quantityToDeduct,
+          deductedInMl: actualQuantityInMl,
           timestamp: new Date()
         };
 
