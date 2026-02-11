@@ -184,7 +184,7 @@ const updatecommondata = async (req, res) => {
 
     const query = `UPDATE ?? SET ${fields} WHERE ?? = ?`;
     const [result] = await db.query(query, [table, ...values, col1, val1]);
-
+console.log('🟢 Update Query Executed:', query);
     if (result.affectedRows === 0) {
       return res.status(404).json({ msg: 'Record not found' });
     }

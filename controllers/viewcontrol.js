@@ -134,11 +134,13 @@ const fetchDataFromTwoTables = async (req, res) => {
     const { tbl1, tbl2, col1, col2, orderby } = req.params;
     const { where } = req.query;
 
+    const joinCol1 = tbl1 === 'tablelist' && col1 === 'table_cat_id' ? 'category' : col1;
+
     // Build dynamic SQL
     let query = `
       SELECT t1.*, t2.*
       FROM ${tbl1} t1
-      INNER JOIN ${tbl2} t2 ON t1.${col1} = t2.${col2}
+      INNER JOIN ${tbl2} t2 ON t1.${joinCol1} = t2.${col2}
     `;
 
     if (where) {

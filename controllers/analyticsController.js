@@ -4,12 +4,34 @@ const db = require('../config/dbconnection1');
 // GET ANALYTICS DASHBOARD DATA
 const getAnalyticsDashboard = async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const formatDate = (dateValue) => {
+      const date = new Date(dateValue);
+      return date.toISOString().split('T')[0];
+    };
+
+    const [latestCloseRows] = await db.query(
+      `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`
+    );
+
+    let today;
+    let yesterday;
+
+    if (latestCloseRows.length > 0 && latestCloseRows[0].close_date) {
+      const latestCloseDate = new Date(latestCloseRows[0].close_date);
+      const todayDate = new Date(latestCloseDate);
+      todayDate.setDate(todayDate.getDate() + 1);
+
+      today = formatDate(todayDate);
+      yesterday = formatDate(latestCloseDate);
+    } else {
+      today = formatDate(new Date());
+      yesterday = formatDate(new Date(Date.now() - 86400000));
+    }
     
     // Today's and Yesterday's Sales
-     const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [today]);
+    const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [today]);
     const [yesterdaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [yesterday]);
+    const [todayDiscount] = await db.query(`SELECT COALESCE(SUM(discount_amount), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [today]);
     
     // Monthly and Today's Purchases  
     const [monthlyPurchases] = await db.query(`SELECT COALESCE(SUM(netAmount), 0) AS val FROM inventory WHERE YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())`);
@@ -17,6 +39,9 @@ const getAnalyticsDashboard = async (req, res) => {
     
     // Total Orders this month
     const [totalOrders] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())`);
+
+    const [cancelledBills] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE status = 2`);
+    const [entertainmentTotal] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE LOWER(payment_mode) = 'entertainment'`);
     
     // Active Suppliers count - if supplier_id is not available, use a fallback
     let totalSuppliers;
@@ -35,7 +60,10 @@ const getAnalyticsDashboard = async (req, res) => {
         monthlyPurchases: monthlyPurchases[0].val,
         todayPurchases: todayPurchases[0].val,
         totalOrders: totalOrders[0].val,
-        totalSuppliers: totalSuppliers
+        totalSuppliers: totalSuppliers,
+        cancelledBills: cancelledBills[0].val,
+        entertainmentTotal: entertainmentTotal[0].val,
+        todayDiscount: todayDiscount[0].val
       }
     });
   } catch (err) {
@@ -202,8 +230,9 @@ const getTopSellingProducts = async (req, res) => {
       FROM order_items oi
       WHERE EXISTS (
         SELECT 1 FROM final_bill fb 
-        WHERE fb.id = oi.order_id 
+        WHERE CAST(oi.invoice_number AS UNSIGNED) = fb.id 
         AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        AND fb.status != 2
       )
       GROUP BY oi.item_name
       ORDER BY sales DESC
@@ -250,10 +279,8 @@ const getCategoryDistribution = async (req, res) => {
     const query = `
       SELECT 
         CASE 
-          WHEN LOWER(oi.item_name) LIKE '%burger%' OR LOWER(oi.item_name) LIKE '%food%' OR LOWER(oi.item_name) LIKE '%meal%' OR LOWER(oi.item_name) LIKE '%dish%' THEN 'Food Items'
-          WHEN LOWER(oi.item_name) LIKE '%drink%' OR LOWER(oi.item_name) LIKE '%beverage%' OR LOWER(oi.item_name) LIKE '%juice%' OR LOWER(oi.item_name) LIKE '%coffee%' OR LOWER(oi.item_name) LIKE '%tea%' THEN 'Beverages'
-          WHEN LOWER(oi.item_name) LIKE '%equipment%' OR LOWER(oi.item_name) LIKE '%machine%' OR LOWER(oi.item_name) LIKE '%kitchen%' THEN 'Kitchen Equipment'
-          WHEN LOWER(oi.item_name) LIKE '%pack%' OR LOWER(oi.item_name) LIKE '%box%' OR LOWER(oi.item_name) LIKE '%container%' THEN 'Packaging'
+          WHEN LOWER(COALESCE(oi.item_group, '')) = 'food' THEN 'Food Items'
+          WHEN LOWER(COALESCE(oi.item_group, '')) = 'bar' THEN 'Beverages'
           ELSE 'Other Items'
         END as category_name,
         COUNT(*) as count,
@@ -261,24 +288,19 @@ const getCategoryDistribution = async (req, res) => {
           SELECT COUNT(*) FROM order_items oi2 
           WHERE EXISTS (
             SELECT 1 FROM final_bill fb2 
-            WHERE fb2.id = oi2.order_id 
+            WHERE CAST(oi2.invoice_number AS UNSIGNED) = fb2.id 
             AND fb2.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            AND fb2.status != 2
           )
         )), 1) as percentage
       FROM order_items oi
       WHERE EXISTS (
         SELECT 1 FROM final_bill fb 
-        WHERE fb.id = oi.order_id 
+        WHERE CAST(oi.invoice_number AS UNSIGNED) = fb.id 
         AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        AND fb.status != 2
       )
-      GROUP BY 
-        CASE 
-          WHEN LOWER(oi.item_name) LIKE '%burger%' OR LOWER(oi.item_name) LIKE '%food%' OR LOWER(oi.item_name) LIKE '%meal%' OR LOWER(oi.item_name) LIKE '%dish%' THEN 'Food Items'
-          WHEN LOWER(oi.item_name) LIKE '%drink%' OR LOWER(oi.item_name) LIKE '%beverage%' OR LOWER(oi.item_name) LIKE '%juice%' OR LOWER(oi.item_name) LIKE '%coffee%' OR LOWER(oi.item_name) LIKE '%tea%' THEN 'Beverages'
-          WHEN LOWER(oi.item_name) LIKE '%equipment%' OR LOWER(oi.item_name) LIKE '%machine%' OR LOWER(oi.item_name) LIKE '%kitchen%' THEN 'Kitchen Equipment'
-          WHEN LOWER(oi.item_name) LIKE '%pack%' OR LOWER(oi.item_name) LIKE '%box%' OR LOWER(oi.item_name) LIKE '%container%' THEN 'Packaging'
-          ELSE 'Other Items'
-        END
+      GROUP BY category_name
       ORDER BY count DESC
     `;
     
@@ -288,8 +310,6 @@ const getCategoryDistribution = async (req, res) => {
     const categoryColors = {
       'Food Items': '#e74c3c',
       'Beverages': '#3498db',
-      'Kitchen Equipment': '#2ecc71',
-      'Packaging': '#f39c12',
       'Other Items': '#9b59b6'
     };
     
@@ -305,9 +325,7 @@ const getCategoryDistribution = async (req, res) => {
       const defaultCategories = [
         { name: 'Food Items', value: 35, color: '#e74c3c' },
         { name: 'Beverages', value: 25, color: '#3498db' },
-        { name: 'Kitchen Equipment', value: 20, color: '#2ecc71' },
-        { name: 'Packaging', value: 15, color: '#f39c12' },
-        { name: 'Cleaning Supplies', value: 5, color: '#9b59b6' }
+        { name: 'Other Items', value: 40, color: '#9b59b6' }
       ];
       return res.json({ success: true, data: defaultCategories });
     }
@@ -319,9 +337,7 @@ const getCategoryDistribution = async (req, res) => {
     const defaultCategories = [
       { name: 'Food Items', value: 35, color: '#e74c3c' },
       { name: 'Beverages', value: 25, color: '#3498db' },
-      { name: 'Kitchen Equipment', value: 20, color: '#2ecc71' },
-      { name: 'Packaging', value: 15, color: '#f39c12' },
-      { name: 'Cleaning Supplies', value: 5, color: '#9b59b6' }
+      { name: 'Other Items', value: 40, color: '#9b59b6' }
     ];
     res.json({ success: true, data: defaultCategories });
   }
@@ -331,9 +347,10 @@ const getCategoryDistribution = async (req, res) => {
 const getTotalSalesExpenses = async (req, res) => {
   try {
     const [salesResult] = await db.query(`
-      SELECT COALESCE(SUM(grand_total), 0) as total_sales 
-      FROM final_bill 
-      WHERE YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())
+      SELECT COALESCE(SUM(net_sales), 0) as total_sales 
+      FROM day_close_summary 
+      WHERE YEAR(close_date) = YEAR(CURDATE()) 
+        AND MONTH(close_date) = MONTH(CURDATE())
     `);
     
     const [expensesResult] = await db.query(`
@@ -431,6 +448,93 @@ const getPurchaseTrends = async (req, res) => {
   }
 };
 
+// GET FOOD AND DRINKS/LIQUOR SALES
+const getFoodAndDrinksSale = async (req, res) => {
+  try {
+    console.log("getFoodAndDrinksSale - Function called");
+
+    const formatDate = (dateValue) => {
+      const date = new Date(dateValue);
+      return date.toISOString().split('T')[0];
+    };
+
+    const closeDateQuery = `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`;
+    console.log("getFoodAndDrinksSale - Close date query:", closeDateQuery);
+    
+    const [latestCloseRows] = await db.query(closeDateQuery);
+
+    console.log("getFoodAndDrinksSale - Latest close rows:", latestCloseRows);
+
+    let today;
+
+    if (latestCloseRows.length > 0 && latestCloseRows[0].close_date) {
+      const latestCloseDate = new Date(latestCloseRows[0].close_date);
+      const todayDate = new Date(latestCloseDate);
+      todayDate.setDate(todayDate.getDate() + 1);
+      today = formatDate(todayDate);
+    } else {
+      today = formatDate(new Date());
+    }
+
+    console.log("getFoodAndDrinksSale - Today date:", today);
+
+    // Get Sales grouped by item_group - excluding cancelled and entertainment bills
+    const groupedQuery = `
+      SELECT 
+        COALESCE(oi.item_group, 'Other') as item_group,
+        COALESCE(SUM(oi.total_price), 0) as total_sale,
+        COUNT(*) as item_count
+      FROM order_items oi
+      WHERE DATE(oi.setup_date) = ?
+        AND EXISTS (
+          SELECT 1 FROM final_bill fb 
+          WHERE CAST(oi.invoice_number AS UNSIGNED) = fb.id 
+          AND fb.status != 2
+          AND LOWER(COALESCE(fb.payment_mode, '')) != 'entertainment'
+        )
+      GROUP BY oi.item_group
+      ORDER BY total_sale DESC
+    `;
+    console.log("getFoodAndDrinksSale - Grouped by item_group query:", groupedQuery, "Params:", [today]);
+    
+    const [groupedSales] = await db.query(groupedQuery, [today]);
+
+    console.log("getFoodAndDrinksSale - Grouped sales:", groupedSales);
+
+    // Format the response - show each item_group with its sales
+    const salesByGroup = {};
+    let totalAllSales = 0;
+
+    groupedSales.forEach(row => {
+      const groupName = row.item_group || 'Other';
+      const totalSale = parseFloat(row.total_sale);
+      salesByGroup[groupName] = {
+        total_sale: totalSale,
+        item_count: row.item_count
+      };
+      totalAllSales += totalSale;
+    });
+
+    const responseData = {
+      saleDate: today,
+      sales_by_group: salesByGroup,
+      total_all_sales: totalAllSales
+    };
+
+    console.log("getFoodAndDrinksSale - Response data:", responseData);
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+  } catch (err) {
+    console.error("Error fetching food and drinks sales:", err);
+    console.error("Error details:", err.message);
+    console.error("Error stack:", err.stack);
+    res.status(500).json({ error: "Failed to fetch food and drinks sales", details: err.message });
+  }
+};
+
 module.exports = {
   getAnalyticsDashboard,
   getMonthlySalesVsPurchases,
@@ -440,5 +544,6 @@ module.exports = {
   getCategoryDistribution,
   getTotalSalesExpenses,
   getDailySalesTrend,
-  getPurchaseTrends
+  getPurchaseTrends,
+  getFoodAndDrinksSale
 };

@@ -13,5 +13,6 @@ router.get('/category-distribution', auth.isAuthorize, analyticsController.getCa
 router.get('/sales-expenses', auth.isAuthorize, analyticsController.getTotalSalesExpenses);
 router.get('/daily-sales-trend', auth.isAuthorize, analyticsController.getDailySalesTrend);
 router.get('/purchase-trends', auth.isAuthorize, analyticsController.getPurchaseTrends);
+router.get('/food-liquor-sale', auth.isAuthorize, analyticsController.getFoodAndDrinksSale);
 
 module.exports = router;
