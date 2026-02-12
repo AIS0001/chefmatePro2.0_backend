@@ -137,6 +137,7 @@ const insertdatabulk = async (req, res) => {
         item.order_number || item.order_id,
         item.table_number,
         item.item_name,
+        item.item_group || null,
         item.quantity,
         item.total_amount || item.total_price,
         item.status || 'pending',
@@ -144,10 +145,10 @@ const insertdatabulk = async (req, res) => {
         item.table_cat_id || null
       ]);
       
-      query = `INSERT INTO ${tableName} (order_id, table_number, item_name, quantity, total_price, status, setup_date, table_cat_id) VALUES ?`;
+      query = `INSERT INTO ${tableName} (order_id, table_number, item_name, item_group, quantity, total_price, status, setup_date, table_cat_id) VALUES ?`;
     }
 
-    // console.log('Bulk Insert Query:', query);
+     console.log('Bulk Insert Query:', query);
     // console.log('Bulk Insert Values:', values);
     // console.log('Table Name:', tableName);
     

@@ -451,19 +451,28 @@ const getPurchaseTrends = async (req, res) => {
 // GET FOOD AND DRINKS/LIQUOR SALES
 const getFoodAndDrinksSale = async (req, res) => {
   try {
+<<<<<<< HEAD
     console.log("getFoodAndDrinksSale - Function called");
 
+=======
+>>>>>>> 2af1321f947fc6f3466bc530f63257f890c39a7d
     const formatDate = (dateValue) => {
       const date = new Date(dateValue);
       return date.toISOString().split('T')[0];
     };
 
+<<<<<<< HEAD
     const closeDateQuery = `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`;
     console.log("getFoodAndDrinksSale - Close date query:", closeDateQuery);
     
     const [latestCloseRows] = await db.query(closeDateQuery);
 
     console.log("getFoodAndDrinksSale - Latest close rows:", latestCloseRows);
+=======
+    const [latestCloseRows] = await db.query(
+      `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`
+    );
+>>>>>>> 2af1321f947fc6f3466bc530f63257f890c39a7d
 
     let today;
 
@@ -476,6 +485,7 @@ const getFoodAndDrinksSale = async (req, res) => {
       today = formatDate(new Date());
     }
 
+<<<<<<< HEAD
     console.log("getFoodAndDrinksSale - Today date:", today);
 
     // Get Sales grouped by item_group - excluding cancelled and entertainment bills
@@ -531,6 +541,40 @@ const getFoodAndDrinksSale = async (req, res) => {
     console.error("Error fetching food and drinks sales:", err);
     console.error("Error details:", err.message);
     console.error("Error stack:", err.stack);
+=======
+    // Get Food Sales
+    const [foodSales] = await db.query(`
+      SELECT COALESCE(SUM(total_price), 0) as total_food_sale
+      FROM order_items
+      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'food'
+    `, [today]);
+
+    // Get Drinks/Liquor Sales
+    const [drinksSales] = await db.query(`
+      SELECT COALESCE(SUM(total_price), 0) as total_drinks_sale
+      FROM order_items
+      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'bar'
+    `, [today]);
+
+    // Get Shisha Sales
+    const [shishaSales] = await db.query(`
+      SELECT COALESCE(SUM(total_price), 0) as total_shisha_sale
+      FROM order_items
+      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'shisha'
+    `, [today]);
+
+    res.json({
+      success: true,
+      data: {
+        totalFoodSale: foodSales[0].total_food_sale,
+        totalDrinksSale: drinksSales[0].total_drinks_sale,
+        totalShishaSale: shishaSales[0].total_shisha_sale,
+        saleDate: today
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching food and drinks sales:", err);
+>>>>>>> 2af1321f947fc6f3466bc530f63257f890c39a7d
     res.status(500).json({ error: "Failed to fetch food and drinks sales", details: err.message });
   }
 };

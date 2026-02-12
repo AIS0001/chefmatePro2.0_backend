@@ -7,6 +7,7 @@ const userRouters = require("./routes/userRoutes");
 const dashboardRouters = require("./routes/dashboardRoutes");
 const printRouters = require("./routes/printRoutes");
 const analyticsRouters = require("./routes/analyticsRoutes");
+const accountsRouters = require("./routes/accountsRoutes");
 const kioskRouters = require("./routes/kioskRoutes");
 const scbRouters = require('./routes/scbRoutes.js');
 const stockRouters = require('./routes/stockRoutes.js');
@@ -21,9 +22,9 @@ const app = express();
 ================================== */
 app.use((req, res, next) => {
   const allowedOrigins = [
-    "https://balibeachclub.livecloudnet.com",
-    "http://localhost:3000",
-    "https://localhost:3000"
+    "https://jlaunge.livecloudnet.com",
+    "http://192.168.1.10:3000",
+    "http://localhost:3000"
   ];
 
   const origin = req.headers.origin;
@@ -61,6 +62,7 @@ app.use("/api", userRouters);
 app.use("/api", printRouters);
 app.use("/api", dashboardRouters);
 app.use("/api/analytics", analyticsRouters);
+app.use("/api/accounts", accountsRouters);
 app.use("/api/kiosk", kioskRouters);
 app.use("/kiosk", kioskRouters);
 app.use('/api/scb', scbRouters);
@@ -76,7 +78,7 @@ app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
 
   // 🔥 ENSURE CORS HEADERS EVEN ON ERROR
-  res.header("Access-Control-Allow-Origin", "https://balibeachclub.livecloudnet.com");
+  res.header("Access-Control-Allow-Origin", "https://jlaunge.livecloudnet.com");
   res.header("Access-Control-Allow-Credentials", "true");
 
   res.status(500).json({
