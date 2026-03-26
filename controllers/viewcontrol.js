@@ -5,6 +5,21 @@ const { db, format } = require('../config/dbconnection');
 const jwt = require('jsonwebtoken');
 const jwt_secret = 'setupnewkey';
 
+// Cache: tables that have a shop_id column (loaded once on first request)
+let _shopIdTables = null;
+const getShopIdTables = async () => {
+  if (_shopIdTables) return _shopIdTables;
+  try {
+    const [rows] = await db.query(
+      "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE COLUMN_NAME = 'shop_id' AND TABLE_SCHEMA = DATABASE()"
+    );
+    _shopIdTables = new Set(rows.map(r => r.TABLE_NAME));
+  } catch (e) {
+    _shopIdTables = new Set();
+  }
+  return _shopIdTables;
+};
+
 const allUsers = async (req, res) => {
   try {
     const authToken = req.headers.authorization.split(' ')[1];
@@ -88,6 +103,16 @@ const fetchData = async (req, res) => {
     for (const [key, value] of params.entries()) {
       conditions.push(`${key} = ?`);
       values.push(value);
+    }
+
+    // Auto-inject shop_id filter if user has shop_id and table supports it
+    const userShopId = req.user?.shop_id;
+    if (userShopId) {
+      const shopTables = await getShopIdTables();
+      if (shopTables.has(tblname)) {
+        conditions.push('shop_id = ?');
+        values.push(userShopId);
+      }
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';

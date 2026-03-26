@@ -29,6 +29,43 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
+
+// Business date - derived from last day_close_summary
+router.get('/business-date', auth.isAuthorize, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1'
+    );
+    let businessDate;
+    if (rows.length > 0 && rows[0].close_date) {
+      const lastClose = new Date(rows[0].close_date);
+      lastClose.setDate(lastClose.getDate() + 1);
+      businessDate = lastClose.toISOString().split('T')[0];
+    } else {
+      businessDate = new Date().toISOString().split('T')[0];
+    }
+    res.json({ success: true, business_date: businessDate });
+  } catch (err) {
+    console.error('Business date error:', err);
+    res.json({ success: true, business_date: new Date().toISOString().split('T')[0] });
+  }
+});
+
+// Get shop name by shop_id (for Topbar display)
+router.get('/shop-name', auth.isAuthorize, async (req, res) => {
+  try {
+    const shopId = req.query.shop_id || req.user?.shop_id;
+    if (!shopId) {
+      return res.json({ success: false, shop_name: '' });
+    }
+    const [rows] = await db.query('SELECT name FROM shops WHERE id = ?', [shopId]);
+    res.json({ success: true, shop_name: rows.length > 0 ? rows[0].name : '' });
+  } catch (err) {
+    console.error('Shop name error:', err);
+    res.json({ success: false, shop_name: '' });
+  }
+});
+
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/users-with-uuid', auth.isAuthorize, usercontroller.getUsersWithUuid);
 router.delete('/users/:id/uuid', auth.isAuthorize, usercontroller.clearUserUuid);

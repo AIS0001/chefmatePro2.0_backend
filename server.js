@@ -16,6 +16,8 @@ const kioskRouters = require("./routes/kioskRoutes");
 const scbRouters = require('./routes/scbRoutes.js');
 const stockRouters = require('./routes/stockRoutes.js');
 const purchaseRouters = require('./routes/purchaseRoutes.js');
+const superAdminRouters = require('./routes/superAdminRoutes.js');
+const shopManagementRouters = require('./routes/shopManagementRoutes.js');
 
 require("./config/dbconnection");
 
@@ -71,6 +73,10 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// ===== TENANT MIDDLEWARE FOR MULTI-TENANT SUPPORT =====
+const { tenantMiddleware } = require('./middleware/tenantMiddleware');
+app.use(tenantMiddleware);
+
 /* ==================================
    ROUTES
 ================================== */
@@ -88,6 +94,10 @@ app.use('/api/scb', scbRouters);
 app.use('/kiosk/scb', scbRouters);
 app.use('/api/stock', stockRouters);
 app.use('/api/purchase', purchaseRouters);
+
+// ===== NEW SAAS ROUTES =====
+app.use('/api/super-admin', superAdminRouters);
+app.use('/api/shop', shopManagementRouters);
 
 
 /* ==================================

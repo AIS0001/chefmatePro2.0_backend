@@ -51,7 +51,7 @@ const login = async (req, res) => {
     }
 
     const { uname, pass, mac_address, device_name } = req.body;
-    const query = `SELECT * FROM users WHERE uname = ?`;
+    const query = `SELECT u.*, s.name AS shop_name FROM users u LEFT JOIN shops s ON u.shop_id = s.id WHERE u.uname = ?`;
 
     const [rows] = await db.query(query, [uname]);
 
@@ -128,8 +128,22 @@ const login = async (req, res) => {
         console.warn(`⚠️ Login attempt without device MAC for user ${user.uname}`);
       }
 
-      const token = jwt.sign({ id: user.id, type: user.type }, jwt_secret, { expiresIn: "60m" });
-      res.status(200).json({ msg: "Login successful", token, data: user });
+      const token = jwt.sign({ id: user.id, type: user.type, shop_id: user.shop_id }, jwt_secret, { expiresIn: "60m" });
+      
+      // Add bypass flags for admin users
+      const response = { 
+        msg: "Login successful", 
+        token, 
+        data: user
+      };
+
+      // If user is admin, bypass MAC verification
+      if (isAdmin) {
+        response.skip_mac_verification = true;
+        response.bypass_device_auth = true;
+      }
+
+      res.status(200).json(response);
     } else {
       res.status(401).json({ error: "Invalid Password" });
     }

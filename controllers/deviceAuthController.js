@@ -175,12 +175,23 @@ const getUserDevices = async (req, res) => {
  */
 const verifyMacAddress = async (req, res) => {
   try {
-    const { user_id, mac_address } = req.body;
+    const { user_id, mac_address, is_super_admin } = req.body;
 
     if (!user_id || !mac_address) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: user_id, mac_address"
+      });
+    }
+
+    // ✅ SUPER ADMIN BYPASS: Skip all MAC verification for super admin users
+    if (is_super_admin) {
+      return res.json({
+        success: true,
+        authorized: true,
+        reason: "Super admin access - MAC authentication bypassed",
+        device_id: null,
+        device_name: "Super Admin"
       });
     }
 
