@@ -1,11 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
+const cors = require("cors");
 const path = require("path");
 
 const userRouters = require("./routes/userRoutes");
 const dashboardRouters = require("./routes/dashboardRoutes");
 const printRouters = require("./routes/printRoutes");
+const printerConfigRouters = require("./routes/printerConfigRoutes");
+const deviceAuthRouters = require("./routes/deviceAuthRoutes");
+const cloudAgentRouters = require("./routes/cloudAgentRoutes");
 const analyticsRouters = require("./routes/analyticsRoutes");
 const accountsRouters = require("./routes/accountsRoutes");
 const kioskRouters = require("./routes/kioskRoutes");
@@ -17,35 +21,47 @@ require("./config/dbconnection");
 
 const app = express();
 
-/* ==================================
-   🔥 FORCE CORS HEADERS (CRITICAL)
-================================== */
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    "https://jlaunge.livecloudnet.com",
-    "http://192.168.1.10:3000",
-    "http://localhost:3000"
-  ];
+const isAllowedOrigin = (origin) => {
+  return typeof origin === "string" && origin.length > 0;
+};
 
+const applyCorsHeaders = (req, res) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+
+  if (isAllowedOrigin(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin");
   }
 
   res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.header(
     "Access-Control-Allow-Headers",
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
   );
+};
 
-  // 🔥 Handle preflight HERE
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+const corsOptionsDelegate = (req, callback) => {
+  const origin = req.headers.origin;
 
+  callback(null, {
+    origin: isAllowedOrigin(origin),
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"],
+    optionsSuccessStatus: 204
+  });
+};
+
+/* ==================================
+   CORS
+================================== */
+app.use((req, res, next) => {
+  applyCorsHeaders(req, res);
   next();
 });
+app.use(cors(corsOptionsDelegate));
+app.options("*", cors(corsOptionsDelegate));
 
 /* ==================================
    MIDDLEWARES
@@ -60,6 +76,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 ================================== */
 app.use("/api", userRouters);
 app.use("/api", printRouters);
+app.use("/api/printer", printerConfigRouters);
+app.use("/api/device", deviceAuthRouters);
+app.use("/api/cloud-agent", cloudAgentRouters);
 app.use("/api", dashboardRouters);
 app.use("/api/analytics", analyticsRouters);
 app.use("/api/accounts", accountsRouters);
@@ -77,9 +96,7 @@ app.use('/api/purchase', purchaseRouters);
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
 
-  // 🔥 ENSURE CORS HEADERS EVEN ON ERROR
-  res.header("Access-Control-Allow-Origin", "https://jlaunge.livecloudnet.com");
-  res.header("Access-Control-Allow-Credentials", "true");
+  applyCorsHeaders(req, res);
 
   res.status(500).json({
     message: err.message || "Internal Server Error"

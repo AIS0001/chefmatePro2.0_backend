@@ -9,6 +9,7 @@ const savebillController = require("../controllers/billControl");
 const deletecontroller = require("../controllers/deletecontrol");
 const viewcontroller = require("../controllers/viewcontrol");
 const updatecontroller = require("../controllers/updatecontrol");
+const { db } = require('../config/dbconnection');
 // const featureController = require("../controllers/featureController"); // Disabled
 const path = require('path');
 const multer = require('multer');
@@ -29,7 +30,22 @@ const upload = multer({ storage: storage });
 router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
+router.get('/users-with-uuid', auth.isAuthorize, usercontroller.getUsersWithUuid);
+router.delete('/users/:id/uuid', auth.isAuthorize, usercontroller.clearUserUuid);
 router.get('/allusers',auth.isAuthorize,viewcontroller.allUsers);
+router.get('/users',auth.isAuthorize,viewcontroller.allUsers);
+
+// Public endpoint for device management - without auth requirement
+router.get('/public/users', async (req, res) => {
+  try {
+    const [result] = await db.query(`SELECT id, name, uname, email, contact, type, status FROM users ORDER BY id ASC`);
+    res.status(200).send({ success: true, data: result, message: 'Fetch Data Successfully' });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).send({ success: false, message: 'Internal Server Error' });
+  }
+});
+
 router.get('/getlatestrecord/:tablename',auth.isAuthorize,viewcontroller.getLatestRecord);
 router.get('/getnextitemcode',auth.isAuthorize,viewcontroller.getNextItemCode);
 

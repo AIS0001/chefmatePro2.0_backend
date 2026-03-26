@@ -9,7 +9,7 @@ const allUsers = async (req, res) => {
   try {
     const authToken = req.headers.authorization.split(' ')[1];
     jwt.verify(authToken, jwt_secret);
-    const [result] = await db.query(`SELECT * FROM user ORDER BY id ASC`);
+    const [result] = await db.query(`SELECT * FROM users ORDER BY id ASC`);
     res.status(200).send({ success: true, data: result, message: 'Fetch Data Successfully' });
   } catch (err) {
     console.error('Error in allUsers:', err);
