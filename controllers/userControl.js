@@ -4,6 +4,7 @@ const { db, format } = require("../config/dbconnection");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const paymentController = require('./paymentController');
+const { requireShopId } = require('../helpers/shopScope');
 const jwt_secret = process.env.JWT_SECRET || "setupnewkey";
 
 // REGISTER
@@ -199,11 +200,19 @@ const getuser = async (req, res) => {
 // GET ALL USERS WITH UUID
 const getUsersWithUuid = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
     const [rows] = await db.query(
       `SELECT id, name, uname, email, type, status, user_uuid, last_loggedin
        FROM users
-       WHERE user_uuid IS NOT NULL AND user_uuid <> ''
-       ORDER BY id ASC`
+       WHERE shop_id = ?
+         AND user_uuid IS NOT NULL
+         AND user_uuid <> ''
+       ORDER BY id ASC`,
+      [shopId]
     );
 
     return res.status(200).json({
@@ -224,6 +233,11 @@ const getUsersWithUuid = async (req, res) => {
 // DELETE/CLEAR UUID FOR PARTICULAR USER
 const clearUserUuid = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
     const { id } = req.params;
 
     if (!id || Number.isNaN(Number(id))) {
@@ -234,8 +248,8 @@ const clearUserUuid = async (req, res) => {
     }
 
     const [users] = await db.query(
-      `SELECT id, uname, name, user_uuid FROM users WHERE id = ? LIMIT 1`,
-      [id]
+      `SELECT id, uname, name, user_uuid FROM users WHERE id = ? AND shop_id = ? LIMIT 1`,
+      [id, shopId]
     );
 
     if (!users || users.length === 0) {
@@ -259,7 +273,7 @@ const clearUserUuid = async (req, res) => {
       });
     }
 
-    await db.query(`UPDATE users SET user_uuid = NULL WHERE id = ?`, [id]);
+    await db.query(`UPDATE users SET user_uuid = NULL WHERE id = ? AND shop_id = ?`, [id, shopId]);
 
     return res.status(200).json({
       success: true,

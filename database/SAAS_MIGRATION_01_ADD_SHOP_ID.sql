@@ -357,7 +357,7 @@ ADD KEY `idx_shop_id` (`shop_id`);
 CREATE INDEX idx_shops_subscription_status ON shops(subscription_status, is_active);
 CREATE INDEX idx_shops_created_at ON shops(created_at);
 CREATE INDEX idx_shop_billing_by_shop ON shop_billing(shop_id, billing_period_start);
-CREATE INDEX idx_shop_audit_logs_shop_action ON shop_audit_logs(shop_id, action, created_at);
+CREATE INDEX shop table already exist only add alter command to add shop id  ON shop_audit_logs(shop_id, action, created_at);
 
 -- ===================================================
 -- MIGRATION COMPLETE

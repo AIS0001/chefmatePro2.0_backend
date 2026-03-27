@@ -3,6 +3,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const path = require("path");
+const http = require("http");
+const fileUpload = require("express-fileupload");
 
 const userRouters = require("./routes/userRoutes");
 const dashboardRouters = require("./routes/dashboardRoutes");
@@ -18,6 +20,15 @@ const stockRouters = require('./routes/stockRoutes.js');
 const purchaseRouters = require('./routes/purchaseRoutes.js');
 const superAdminRouters = require('./routes/superAdminRoutes.js');
 const shopManagementRouters = require('./routes/shopManagementRoutes.js');
+const errorLogsRouters = require('./routes/errorLogsRoutes.js');
+const notificationsRouters = require('./routes/notificationsRoutes.js');
+const logsRouters = require('./routes/logsRoutes.js');
+
+// ===== ERROR LOGGING MIDDLEWARE =====
+const { responseTimeMiddleware, errorLoggingMiddleware, notFoundMiddleware } = require('./middleware/errorLoggingMiddleware');
+
+// ===== WEBSOCKET MANAGER =====
+const websocketManager = require('./helpers/websocketManager');
 
 require("./config/dbconnection");
 
@@ -68,10 +79,51 @@ app.options("*", cors(corsOptionsDelegate));
 /* ==================================
    MIDDLEWARES
 ================================== */
-app.use(express.json({ limit: "30mb" }));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+const isMultipartRequest = (req) => {
+  const contentType = (req.headers['content-type'] || '').toLowerCase();
+  return contentType.includes('multipart/form-data');
+};
+
+app.use((req, res, next) => {
+  if (isMultipartRequest(req)) {
+    return next();
+  }
+  return express.json({ limit: "30mb" })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (isMultipartRequest(req)) {
+    return next();
+  }
+  return bodyParser.urlencoded({ limit: "30mb", extended: true })(req, res, next);
+});
+
+// Skip express-fileUpload for multer routes (/addnewproduct)
+app.use((req, res, next) => {
+  if (isMultipartRequest(req) && req.path.includes('/addnewproduct')) {
+    return next();
+  }
+  return fileUpload({ limits: { fileSize: 30 * 1024 * 1024 } })(req, res, next);
+});
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// ===== ERROR HANDLER FOR REQUEST STREAM ERRORS =====
+app.use((req, res, next) => {
+  req.on('error', (err) => {
+    console.error('Request stream error:', err);
+    if (!res.headersSent) {
+      res.status(400).json({ 
+        message: 'Request error: ' + err.message,
+        error: 'Stream aborted or incomplete data'
+      });
+    }
+  });
+  next();
+});
+
+// ===== RESPONSE TIME TRACKING MIDDLEWARE (EARLY) =====
+app.use(responseTimeMiddleware);
 
 // ===== TENANT MIDDLEWARE FOR MULTI-TENANT SUPPORT =====
 const { tenantMiddleware } = require('./middleware/tenantMiddleware');
@@ -97,26 +149,106 @@ app.use('/api/purchase', purchaseRouters);
 
 // ===== NEW SAAS ROUTES =====
 app.use('/api/super-admin', superAdminRouters);
+app.use('/api/super-admin', errorLogsRouters);
+app.use('/api/super-admin/notifications', notificationsRouters);
+app.use('/api/notifications', notificationsRouters);
 app.use('/api/shop', shopManagementRouters);
+app.use('/api/super-admin', logsRouters);
 
 
 /* ==================================
-   ERROR HANDLER (LAST)
+   404 & ERROR LOGGING HANDLERS
+================================== */
+// Error logging middleware catches errors in responses
+app.use(errorLoggingMiddleware);
+
+// 404 handler (must be after all routes)
+app.use(notFoundMiddleware);
+
+
+/* ==================================
+   GLOBAL ERROR HANDLER (LAST)
 ================================== */
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
 
   applyCorsHeaders(req, res);
 
-  res.status(500).json({
+  // Handle multer errors
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({
+      message: 'File too large. Maximum size is 50MB'
+    });
+  }
+
+  if (err.code === 'LIMIT_FILE_COUNT') {
+    return res.status(400).json({
+      message: 'Too many files. Maximum 5 files allowed'
+    });
+  }
+
+  if (err.message && err.message.includes('Unexpected end of form')) {
+    return res.status(400).json({
+      message: 'Invalid form data: ' + err.message,
+      hint: 'Ensure all files are uploaded correctly and request body is complete'
+    });
+  }
+
+  res.status(err.status || 500).json({
     message: err.message || "Internal Server Error"
   });
+});
+
+/* ==================================
+   UNHANDLED ERROR HANDLERS
+================================== */
+// Handle unhandled Promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Log to error logging service if available
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Optionally restart the process or log to error tracking service
 });
 
 /* ==================================
    SERVER
 ================================== */
 const PORT = process.env.PORT || 4402;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize WebSocket manager
+websocketManager.initialize(server, {
+  perMessageDeflate: false,
+  backpressureLimit: 100 * 1024 * 1024 // 100MB
 });
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`WebSocket available at ws://localhost:${PORT}/ws`);
+  
+  // Log server stats every 30 seconds
+  setInterval(() => {
+    const stats = websocketManager.getStats();
+    if (stats.totalConnections > 0) {
+      console.log(`[WebSocket Stats] Users: ${stats.totalUsers}, Shops: ${stats.totalShops}, Connections: ${stats.totalConnections}`);
+    }
+  }, 30000);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\nShutting down gracefully...');
+  websocketManager.close();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+

@@ -253,6 +253,11 @@ const addNewProduct = async (req, res) => {
     const product_id = req.body.product_id;
     const tbl = req.params.tablename;
 
+    // Validate product_id exists
+    if (!product_id) {
+      return res.status(400).json({ message: 'product_id is required' });
+    }
+
     // Check if files exist
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
@@ -270,9 +275,25 @@ const addNewProduct = async (req, res) => {
     const query = `INSERT INTO ${tbl} (shop_id, product_id, filename, path, mimetype, size) VALUES ?`;
     await db.query(query, [files]);
 
-    res.status(200).json({ message: 'Images uploaded and saved to database successfully!' });
+    res.status(200).json({ 
+      message: 'Images uploaded and saved to database successfully!',
+      filesCount: files.length
+    });
   } catch (err) {
     console.error('Image Upload Error:', err);
+    
+    // Clean up uploaded files in case of database error
+    if (req.files && req.files.length > 0) {
+      const fs = require('fs');
+      req.files.forEach(file => {
+        try {
+          fs.unlinkSync(file.path);
+        } catch (unlinkErr) {
+          console.error(`Failed to delete file ${file.path}:`, unlinkErr);
+        }
+      });
+    }
+    
     res.status(500).json({ message: 'Failed to upload images', error: err.message });
   }
 };

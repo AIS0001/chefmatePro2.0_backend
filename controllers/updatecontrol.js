@@ -118,6 +118,102 @@ const updateCompanyInfo = async (req, res) => {
   }
 };
 
+/**
+ * Update Company Info with FormData Support and Role-Based Restrictions
+ * SuperAdmin can update: name, tax_id, and all other fields
+ * Shop Admin can update: branding (logo, qrCode), banking details, and other non-critical fields
+ */
+const updateCompanyInfoFormData = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const shopId = req.shop_id || req.user?.shop_id;
+
+    // Get user role from JWT
+    const userRole = req.user?.type || req.user?.role || 'USER';
+    const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'Admin';
+
+    // Fields that only SuperAdmin can modify
+    const superAdminOnlyFields = ['name', 'tax_id'];
+    
+    // Fields that are allowed for regular shop admins (non-critical fields)
+    const shopAdminAllowedFields = [
+      'phone_number', 'email', 'address', 'website', 'city', 'state', 
+      'zip_code', 'country', 'bank_name', 'account_number', 'account_name', 
+      'routing_number', 'swift_code', 'payment_methods', 'terms_and_conditions'
+    ];
+
+    // Build updateData from FormData fields (in req.body for express-fileupload)
+    const updateData = {};
+    const allowedFields = isSuperAdmin 
+      ? ['name', 'tax_id', ...shopAdminAllowedFields]
+      : shopAdminAllowedFields;
+
+    // Extract allowed fields from request body (FormData fields)
+    for (const field of allowedFields) {
+      if (req.body && field in req.body) {
+        // Check if non-superadmin is trying to modify restricted fields
+        if (!isSuperAdmin && superAdminOnlyFields.includes(field)) {
+          continue; // Skip restricted fields for non-admin users
+        }
+        updateData[field] = req.body[field];
+      }
+    }
+
+    // Handle file uploads if present (logo, qrCode)
+    if (req.files) {
+      if (req.files.logo) {
+        updateData.logo = req.files.logo.data; // Binary data
+        updateData.logo_type = req.files.logo.mimetype;
+        updateData.logo_name = req.files.logo.name;
+      }
+      if (req.files.qrCode) {
+        updateData.qr_code = req.files.qrCode.data; // Binary data
+        updateData.qr_code_type = req.files.qrCode.mimetype;
+        updateData.qr_code_name = req.files.qrCode.name;
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: isSuperAdmin ? 'No fields to update' : 'Insufficient permissions to update the requested fields'
+      });
+    }
+
+    // Build query
+    const fields = Object.keys(updateData).map(key => `${key} = ?`).join(", ");
+    const values = Object.values(updateData);
+
+    const query = shopId 
+      ? `UPDATE company_profile SET ${fields} WHERE id = ? AND shop_id = ?`
+      : `UPDATE company_profile SET ${fields} WHERE id = ?`;
+    
+    const params = shopId ? [...values, id, shopId] : [...values, id];
+
+    const [result] = await db.query(query, params);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Company info not found or you do not have permission to modify it'
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Company information updated successfully'
+    });
+
+  } catch (err) {
+    console.error('Error updating company info:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update company info', 
+      error: err.message 
+    });
+  }
+};
+
 const updateSubscription = async (req, res) => {
   try {
     const id = req.params.id;
@@ -251,6 +347,7 @@ module.exports = {
   updateStatus,
   updateStatus1,
   updateCompanyInfo,
+  updateCompanyInfoFormData,
   updatedata,
   updateSubscription,
   updatecommondata

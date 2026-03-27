@@ -26,7 +26,23 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const fileFilter = (req, file, cb) => {
+  const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB file size limit
+    files: 5, // Max 5 files
+  },
+  fileFilter: fileFilter,
+});
 router.post('/register', usercontroller.register);
 router.post('/login',loginValidation, usercontroller.login);
 
@@ -102,7 +118,42 @@ router.post('/public/savebill',savebillController.kiosksavebill);
 router.post('/advancesavebill',auth.isAuthorize,savebillController.advancesavebill);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
 router.post('/insertdatabulkgst/:tablename',auth.isAuthorize,insertcontroller.insertdatabulkgst);
-router.post('/addnewproduct/:tablename', upload.array('images', 5), auth.isAuthorize, insertcontroller.addNewProduct);
+
+// Error handling wrapper for file upload route
+const handleUploadErrors = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'FILE_TOO_LARGE') {
+      return res.status(413).json({ message: 'File too large. Maximum size is 50MB' });
+    }
+    return res.status(400).json({ message: `Upload error: ${err.message}` });
+  } else if (err) {
+    return res.status(400).json({ message: `Error: ${err.message}` });
+  }
+  next();
+};
+
+router.post('/addnewproduct/:tablename', 
+  auth.isAuthorize,
+  (req, res, next) => {
+    upload.array('images', 5)(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'FILE_TOO_LARGE') {
+          return res.status(413).json({ message: 'File too large. Maximum size is 50MB' });
+        }
+        if (err.code === 'LIMIT_FILE_COUNT') {
+          return res.status(400).json({ message: 'Maximum 5 files allowed' });
+        }
+        console.error('Multer Error:', err);
+        return res.status(400).json({ message: `Upload error: ${err.message}` });
+      } else if (err) {
+        console.error('Upload Error:', err);
+        return res.status(400).json({ message: `Error: ${err.message}` });
+      }
+      next();
+    });
+  },
+  insertcontroller.addNewProduct
+);
 
 //View
 
@@ -138,6 +189,7 @@ router.get('/getorderdetails/:table1/:table2',auth.isAuthorize,viewcontroller.ge
 
 //Update
 router.put('/updatedata1/:tablename/:col1/:val1/',auth.isAuthorize,updatecontroller.updateDataPara1);
+router.put('/updatedata/companyinfo/:id', auth.isAuthorize, updatecontroller.updateCompanyInfoFormData);
 router.put('/updatedata/:tablename',updatecontroller.updatedata);
 router.put('/updatesubscription/:tablename/:id',auth.isAuthorize,updatecontroller.updateSubscription);
 router.put('/updatecompanyinfo/',auth.isAuthorize,updatecontroller.updateCompanyInfo);

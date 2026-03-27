@@ -147,7 +147,7 @@ io.on("connection", (socket) => {
       const printResults = [];
       let completedCount = 0;
 
-      allPrinterIps.forEach((printerConfig, idx) => {
+      allPrinterIps.forEach((printerConfig, idx) => {error log file use that and show all error in well format
         const printerIp = printerConfig.ip || printerConfig.printer_ip;
         const port = parseInt(printerConfig.port || printerConfig.printer_port || "9100", 10);
         const terminalId = printerConfig.terminal_id || printerConfig.terminalId || `Printer-${idx + 1}`;

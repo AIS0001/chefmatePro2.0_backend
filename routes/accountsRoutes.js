@@ -170,4 +170,21 @@ router.get(
   accountsController.getAccountsDashboard
 );
 
+// ============================================
+// PENDING INVOICES
+// ============================================
+
+/**
+ * @route   GET /api/accounts/order-items/pending-invoice
+ * @desc    Get pending invoice records (unbilled order items)
+ * @access  Private
+ * @query   shop_id (optional) - Shop identifier
+ * @returns {Object} Array of pending invoice items with totals
+ */
+router.get(
+  '/order-items/pending-invoice',
+  isAuthorize,
+  accountsController.getPendingInvoiceItems
+);
+
 module.exports = router;

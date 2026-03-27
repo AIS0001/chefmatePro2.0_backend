@@ -30,7 +30,19 @@ const allUsers = async (req, res) => {
   try {
     const authToken = req.headers.authorization.split(' ')[1];
     jwt.verify(authToken, jwt_secret);
-    const [result] = await db.query(`SELECT * FROM users ORDER BY id ASC`);
+    
+    const shopId = resolveShopId(req);
+    
+    let query = `SELECT * FROM users`;
+    const params = [];
+    
+    if (shopId) {
+      query += ` WHERE shop_id = ?`;
+      params.push(shopId);
+    }
+    
+    query += ` ORDER BY id ASC`;
+    const [result] = await db.query(query, params);
     res.status(200).send({ success: true, data: result, message: 'Fetch Data Successfully' });
   } catch (err) {
     console.error('Error in allUsers:', err);

@@ -842,6 +842,87 @@ const getAccountsDashboard = async (req, res) => {
   }
 };
 
+/**
+ * Get Pending Invoice Items
+ * Returns order items that haven't been invoiced yet
+ * @route   GET /api/accounts/order-items/pending-invoice
+ * @desc    Get pending invoice records (unbilled order items)
+ * @access  Private
+ * @returns {Object} Array of pending invoice items with totals
+ */
+const getPendingInvoiceItems = async (req, res) => {
+  try {
+    // Get shop_id from query parameters
+    const shopId = req.query.shop_id;
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        error: 'shop_id parameter is required'
+      });
+    }
+
+    // Query for order items that haven't been invoiced yet
+    // Fetch all items where invoice_number is NOT generated (NULL or empty)
+    const query = `
+      SELECT 
+        oi.id,
+        oi.order_id,
+        oi.table_number,
+        oi.item_name,
+        oi.item_group,
+        oi.quantity,
+        oi.total_price,
+        oi.created_at,
+        oi.invoice_number,
+        oi.status,
+        oi.setup_date
+      FROM order_items oi
+      WHERE oi.shop_id = ?
+        AND (oi.invoice_number IS NULL OR oi.invoice_number = '')
+      ORDER BY oi.setup_date DESC, oi.table_number, oi.created_at DESC
+    `;
+    
+    const [items] = await db.query(query, [shopId]);
+
+    // Calculate total amount of all pending invoice items
+    const totalAmount = items.reduce((sum, item) => {
+      return sum + parseFloat(item.total_price || 0);
+    }, 0);
+
+    // Count total items pending invoicing
+    const totalItems = items.length;
+
+    res.json({
+      success: true,
+      data: {
+        totalAmount: parseFloat(totalAmount).toFixed(2),
+        totalItems: totalItems,
+        itemCount: totalItems,
+        items: items.map(item => ({
+          id: item.id,
+          order_id: item.order_id,
+          table_number: item.table_number,
+          item_name: item.item_name,
+          item_group: item.item_group,
+          quantity: parseFloat(item.quantity),
+          total_price: parseFloat(item.total_price),
+          amount: parseFloat(item.total_price),
+          created_at: item.created_at,
+          setup_date: item.setup_date,
+          status: item.status
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pending invoice items:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch pending invoice items',
+      details: error.message
+    });
+  }
+};
+
 // ============================================
 // EXPORTS
 // ============================================
@@ -868,5 +949,8 @@ module.exports = {
   getProfitLossSummary,
   
   // Dashboard Overview
-  getAccountsDashboard
+  getAccountsDashboard,
+  
+  // Pending Invoices
+  getPendingInvoiceItems
 };

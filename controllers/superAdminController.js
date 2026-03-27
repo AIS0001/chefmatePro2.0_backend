@@ -475,7 +475,7 @@ exports.createShop = async (req, res) => {
     // Create initial company info record for the shop
     try {
       await db.query(
-        `INSERT INTO companyinfo (shop_id, name, tax_id, phone_number, email, address) VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO company_profile (shop_id, name, tax_id, phone_number, email, address) VALUES (?, ?, ?, ?, ?, ?)`,
         [result.insertId, name, tax_id || '', phone_number, email, address]
       );
     } catch (companyErr) {
@@ -558,7 +558,7 @@ exports.updateShop = async (req, res) => {
     if (companyUpdates.length > 0) {
       companyParams.push(shop_id);
       await db.query(
-        `UPDATE companyinfo SET ${companyUpdates.join(', ')} WHERE shop_id = ?`,
+        `UPDATE company_profile SET ${companyUpdates.join(', ')} WHERE shop_id = ?`,
         companyParams
       ).catch(err => console.error('Failed to sync companyinfo on shop update:', err));
     }

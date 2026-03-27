@@ -7,8 +7,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Main logs directory
-const LOGS_DIR = path.join(__dirname, '../../logs');
+// Main logs directory - relative to backend folder for server deployment
+const LOGS_DIR = path.join(__dirname, '../logs');
 
 /**
  * Ensure directory exists, create if not
@@ -126,29 +126,62 @@ function readErrorLogs(shop_id, date = new Date()) {
 }
 
 /**
- * Get all error log files for a shop between date range
- * Returns array of file paths
+ * Get all error log files (from flat directory structure)
+ * Reads log files from /logs/ directory (e.g., error-2026-03-27.log)
+ * Returns array of file objects with metadata
  */
 function getErrorLogFiles(shop_id, startDate, endDate) {
   try {
     const files = [];
-    const current = new Date(startDate);
     
-    while (current <= endDate) {
-      const logFile = getLogFilePath(shop_id, current);
-      
-      if (fs.existsSync(logFile)) {
-        files.push({
-          path: logFile,
-          date: new Date(current),
-          size: fs.statSync(logFile).size
-        });
-      }
-      
-      // Move to next day
-      current.setDate(current.getDate() + 1);
+    // Check if flat logs directory exists
+    if (!fs.existsSync(LOGS_DIR)) {
+      console.warn('⚠️ Logs directory not found:', LOGS_DIR);
+      return [];
     }
+
+    // Read all .log files from the flat directory
+    const logFiles = fs.readdirSync(LOGS_DIR).filter(file => file.endsWith('.log'));
     
+    if (logFiles.length === 0) {
+      console.log('ℹ️ No log files found in:', LOGS_DIR);
+      return [];
+    }
+
+    // Process each log file
+    logFiles.forEach(filename => {
+      const filePath = path.join(LOGS_DIR, filename);
+      const stat = fs.statSync(filePath);
+      
+      // Extract date from filename (e.g., error-2026-03-27.log)
+      const dateMatch = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
+      let fileDate = new Date();
+      
+      if (dateMatch) {
+        fileDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
+      }
+
+      // Filter by date range if provided
+      if (startDate && endDate) {
+        if (fileDate < startDate || fileDate > endDate) {
+          return; // Skip files outside date range
+        }
+      }
+
+      files.push({
+        path: filePath,
+        filename: filename,
+        date: fileDate,
+        size: stat.size,
+        createdAt: stat.birthtime,
+        modifiedAt: stat.mtime
+      });
+    });
+
+    // Sort by date (newest first)
+    files.sort((a, b) => b.date - a.date);
+    
+    console.log(`✓ Found ${files.length} log files matching criteria`);
     return files;
     
   } catch (error) {
@@ -204,13 +237,22 @@ function searchErrorLogs(shop_id, searchTerm, startDate, endDate) {
     const results = [];
     
     logFiles.forEach(file => {
-      const content = fs.readFileSync(file.path, 'utf8');
-      
-      if (content.toLowerCase().includes(searchTerm.toLowerCase())) {
+      const logs = parseJsonLogs(file.path);
+      const matches = logs.filter(log => {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          (log.error && log.error.toLowerCase().includes(searchLower)) ||
+          (log.endpoint && log.endpoint.toLowerCase().includes(searchLower)) ||
+          (log.statusCode && log.statusCode.toString().includes(searchTerm)) ||
+          (log.method && log.method.toLowerCase().includes(searchLower))
+        );
+      });
+
+      if (matches.length > 0) {
         results.push({
+          file: file.filename,
           date: file.date,
-          path: file.path,
-          matches: content
+          matches: matches
         });
       }
     });
@@ -300,55 +342,106 @@ function clearAllLogs() {
 }
 
 /**
- * Get log directory statistics
+ * Parse JSON logs from a file
+ * Each line is a JSON object representing an API error
+ */
+function parseJsonLogs(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.trim().split('\n').filter(line => line.length > 0);
+    const logs = [];
+
+    lines.forEach((line, index) => {
+      try {
+        const log = JSON.parse(line);
+        logs.push({
+          id: `${path.basename(filePath)}-${index}`,
+          ...log,
+          severity: determineSeverity(log.statusCode),
+          status: 'OPEN'
+        });
+      } catch (e) {
+        console.warn(`⚠️ Failed to parse line ${index} in ${filePath}`);
+      }
+    });
+
+    return logs;
+  } catch (error) {
+    console.error('❌ Failed to parse JSON logs:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Determine severity from HTTP status code
+ */
+function determineSeverity(statusCode) {
+  if (!statusCode) return 'MEDIUM';
+  
+  if (statusCode >= 500) return 'CRITICAL';
+  if (statusCode >= 400) return 'HIGH';
+  if (statusCode >= 300) return 'MEDIUM';
+  return 'LOW';
+}
+
+/**
+ * Get log directory statistics - reads from flat directory
  */
 function getLogStatistics() {
   try {
     if (!fs.existsSync(LOGS_DIR)) {
-      return { totalSize: 0, fileCount: 0, shops: {} };
+      return { totalSize: 0, fileCount: 0, totalSize_MB: 0, fileCount: 0, oldest_log: null, newest_log: null };
     }
     
     let totalSize = 0;
     let fileCount = 0;
-    const shops = {};
+    let oldestDate = null;
+    let newestDate = null;
     
-    function walkDir(dir) {
-      fs.readdirSync(dir).forEach(file => {
-        const fullPath = path.join(dir, file);
-        const stat = fs.statSync(fullPath);
+    const logFiles = fs.readdirSync(LOGS_DIR).filter(file => file.endsWith('.log'));
+    
+    logFiles.forEach(filename => {
+      const filePath = path.join(LOGS_DIR, filename);
+      const stat = fs.statSync(filePath);
+      
+      totalSize += stat.size;
+      fileCount++;
+      
+      // Extract date from filename
+      const dateMatch = filename.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const fileDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
         
-        if (stat.isDirectory()) {
-          walkDir(fullPath);
-        } else {
-          totalSize += stat.size;
-          fileCount++;
-          
-          // Extract shop_id from path if possible
-          const pathParts = fullPath.split(path.sep);
-          const shopIndex = pathParts.findIndex(p => !isNaN(p) && p.length <= 4);
-          if (shopIndex > 0) {
-            const shopId = pathParts[shopIndex];
-            if (!shops[shopId]) {
-              shops[shopId] = { files: 0, size: 0 };
-            }
-            shops[shopId].files++;
-            shops[shopId].size += stat.size;
-          }
+        if (!oldestDate || fileDate < oldestDate) {
+          oldestDate = fileDate;
         }
-      });
-    }
-    
-    walkDir(LOGS_DIR);
+        if (!newestDate || fileDate > newestDate) {
+          newestDate = fileDate;
+        }
+      }
+    });
     
     return {
+      total_files: fileCount,
+      total_size_mb: parseFloat((totalSize / 1024 / 1024).toFixed(2)),
+      oldest_log: oldestDate ? oldestDate.toISOString().split('T')[0] : null,
+      newest_log: newestDate ? newestDate.toISOString().split('T')[0] : null,
       totalSize: (totalSize / 1024 / 1024).toFixed(2) + ' MB',
-      fileCount,
-      shops
+      fileCount
     };
     
   } catch (error) {
     console.error('❌ Failed to get statistics:', error.message);
-    return { error: error.message };
+    return { 
+      total_files: 0, 
+      total_size_mb: 0, 
+      oldest_log: null, 
+      newest_log: null 
+    };
   }
 }
 
@@ -358,6 +451,8 @@ module.exports = {
   getErrorLogFiles,
   getErrorLogsByDate,
   searchErrorLogs,
+  parseJsonLogs,
+  determineSeverity,
   cleanupOldLogs,
   clearAllLogs,
   getLogStatistics,

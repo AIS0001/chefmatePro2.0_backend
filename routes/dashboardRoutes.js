@@ -17,6 +17,7 @@ router.get("/report/weeklypurchase", auth.isAuthorize, dashcontroller.getWeeklyP
 router.get("/report/monthlypurchase", auth.isAuthorize, dashcontroller.getMonthlyPurchase);
 router.get("/report/weeklysummary", auth.isAuthorize, dashcontroller.getWeeklySummary);
 router.get("/report/monthlysummary", auth.isAuthorize, dashcontroller.getMonthlySummary);
+router.get("/report/next-payment-due", auth.isAuthorize, dashcontroller.getNextPaymentDueDate);
 
 
 module.exports=router

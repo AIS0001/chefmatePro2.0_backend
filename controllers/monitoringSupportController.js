@@ -712,29 +712,32 @@ exports.getMonitoringStats = async (req, res) => {
 // =====================================================
 
 /**
- * Get error logs from text files
- * Reads from /logs/YYYY/MM/DD/shop_id/ directory
+ * Get error logs from text files (JSON formatted)
+ * Reads from /logs/ directory with flat structure
  */
 exports.getFileErrorLogs = async (req, res) => {
   try {
     const fileLogger = require('../services/fileLoggerService');
-    const { shop_id, date_from, date_to, page = 1, limit = 20 } = req.query;
+    const { date_from, date_to, page = 1, limit = 20 } = req.query;
 
-    if (!shop_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'shop_id is required'
-      });
+    // Get date range (default to last 30 days if not specified)
+    let startDate = new Date();
+    let endDate = new Date();
+    
+    if (date_from) {
+      startDate = new Date(date_from);
+    } else {
+      startDate = new Date(new Date().setDate(new Date().getDate() - 30));
     }
 
-    // Get date range
-    const startDate = date_from ? new Date(date_from) : new Date();
-    const endDate = date_to ? new Date(date_to) : startDate;
+    if (date_to) {
+      endDate = new Date(date_to);
+    }
 
-    // Get log files
-    const logFiles = fileLogger.getErrorLogFiles(shop_id, startDate, endDate);
+    // Get log files for date range
+    const logFileObjects = fileLogger.getErrorLogFiles(null, startDate, endDate);
     
-    if (!logFiles || logFiles.length === 0) {
+    if (!logFileObjects || logFileObjects.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
@@ -742,23 +745,28 @@ exports.getFileErrorLogs = async (req, res) => {
       });
     }
 
-    // Paginate results
-    const total = logFiles.length;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedFiles = logFiles.slice(offset, offset + parseInt(limit));
+    // Parse all logs from files
+    let allLogs = [];
+    logFileObjects.forEach(fileObj => {
+      const logs = fileLogger.parseJsonLogs(fileObj.path);
+      allLogs = allLogs.concat(logs);
+    });
 
-    // Read content from files
-    const fs = require('fs');
-    const data = paginatedFiles.map(file => ({
-      date: file.date.toISOString(),
-      size: file.size,
-      content: fs.readFileSync(file.path, 'utf8'),
-      filepath: file.path
-    }));
+    // Sort by timestamp (newest first)
+    allLogs.sort((a, b) => {
+      const timeA = new Date(a.timestamp || 0);
+      const timeB = new Date(b.timestamp || 0);
+      return timeB - timeA;
+    });
+
+    // Apply pagination
+    const total = allLogs.length;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedLogs = allLogs.slice(offset, offset + parseInt(limit));
 
     res.status(200).json({
       success: true,
-      data: data,
+      data: paginatedLogs,
       pagination: {
         total,
         page: parseInt(page),
@@ -806,19 +814,52 @@ exports.getFileLogStatistics = async (req, res) => {
 exports.searchFileErrorLogs = async (req, res) => {
   try {
     const fileLogger = require('../services/fileLoggerService');
-    const { shop_id, search_term, date_from, date_to } = req.query;
+    const { search_term, date_from, date_to } = req.query;
 
-    if (!shop_id || !search_term) {
+    if (!search_term) {
       return res.status(400).json({
         success: false,
-        error: 'shop_id and search_term are required'
+        error: 'search_term is required'
       });
     }
 
     const startDate = date_from ? new Date(date_from) : new Date(new Date().setDate(new Date().getDate() - 30));
     const endDate = date_to ? new Date(date_to) : new Date();
 
-    const results = fileLogger.searchErrorLogs(shop_id, search_term, startDate, endDate);
+    // Get log files
+    const logFileObjects = fileLogger.getErrorLogFiles(null, startDate, endDate);
+
+    if (!logFileObjects || logFileObjects.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        totalResults: 0
+      });
+    }
+
+    // Search through all logs in files
+    let results = [];
+    logFileObjects.forEach(fileObj => {
+      const logs = fileLogger.parseJsonLogs(fileObj.path);
+      const matches = logs.filter(log => {
+        const searchLower = search_term.toLowerCase();
+        return (
+          (log.error && log.error.toLowerCase().includes(searchLower)) ||
+          (log.endpoint && log.endpoint.toLowerCase().includes(searchLower)) ||
+          (log.statusCode && log.statusCode.toString().includes(search_term)) ||
+          (log.method && log.method.toLowerCase().includes(searchLower))
+        );
+      });
+      
+      results = results.concat(matches);
+    });
+
+    // Sort by timestamp (newest first)
+    results.sort((a, b) => {
+      const timeA = new Date(a.timestamp || 0);
+      const timeB = new Date(b.timestamp || 0);
+      return timeB - timeA;
+    });
 
     res.status(200).json({
       success: true,

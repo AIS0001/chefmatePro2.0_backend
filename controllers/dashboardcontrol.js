@@ -424,6 +424,72 @@ const getMonthlySummary = async (req, res) => {
   }
 };
 
+// GET NEXT PAYMENT DUE DATE
+const getNextPaymentDueDate = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
+    // Get the next unpaid payment due date
+    const query = `
+      SELECT pr.due_date, pr.payment_status, ss.status as subscription_status
+      FROM payment_records pr
+      LEFT JOIN shop_subscriptions ss ON pr.subscription_id = ss.id
+      WHERE pr.shop_id = ? 
+        AND pr.payment_status IN ('PENDING', 'FAILED')
+      ORDER BY pr.due_date ASC
+      LIMIT 1
+    `;
+
+    const [results] = await db.query(query, [shopId]);
+    
+    if (results && results.length > 0) {
+      const dueDate = new Date(results[0].due_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      const daysRemaining = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+      const status = results[0].payment_status;
+      
+      // Determine urgency level
+      let urgency = 'normal';
+      if (daysRemaining < 0) {
+        urgency = 'overdue';
+      } else if (daysRemaining <= 3) {
+        urgency = 'urgent';
+      } else if (daysRemaining <= 7) {
+        urgency = 'warning';
+      }
+
+      return res.status(200).json({
+        success: true,
+        due_date: results[0].due_date,
+        days_remaining: Math.max(daysRemaining, 0),
+        is_overdue: daysRemaining < 0,
+        urgency: urgency,
+        payment_status: status,
+        subscription_status: results[0].subscription_status
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      due_date: null,
+      days_remaining: null,
+      urgency: 'none'
+    });
+
+  } catch (err) {
+    console.error("Error fetching payment due date:", err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch payment due date", 
+      details: err.message 
+    });
+  }
+};
+
 module.exports = {
   getSales,
   getPurchase,
@@ -436,5 +502,6 @@ module.exports = {
   getWeeklyPurchase,
   getMonthlyPurchase,
   getWeeklySummary,
-  getMonthlySummary
+  getMonthlySummary,
+  getNextPaymentDueDate
 };
