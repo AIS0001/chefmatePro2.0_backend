@@ -197,6 +197,14 @@ io.on("connection", (socket) => {
 
           const companyAddress = getValue(payload, ["companyAddress", "address"], process.env.COMPANY_ADDRESS || "");
           const companyPhone = getValue(payload, ["companyPhone", "phone", "phone_number"], process.env.COMPANY_PHONE || "");
+          const companyWebsiteRaw = getValue(payload, ["companyWebsite", "website"], "");
+          const companyWebsite = String(companyWebsiteRaw || "").trim();
+          const websiteUrl = companyWebsite
+            ? (/^https?:\/\//i.test(companyWebsite) ? companyWebsite : `https://${companyWebsite}`)
+            : "";
+          const reviewLabel = /google|g\.page|maps/i.test(websiteUrl)
+            ? "Scan for Google Review"
+            : "Visit us online";
           const companyTax = getValue(payload, ["companyTaxDetails", "taxDetails", "tax_id", "taxId"], process.env.COMPANY_TAX_DETAILS || "");
 
           const subtotalAmount = Number(getValue(payload, ["subtotal", "subTotal"], 0));
@@ -267,40 +275,32 @@ io.on("connection", (socket) => {
           printer.text(leftMargin + formatLeftRight("Round Off:", toAmount(roundOffAmount), lineWidth - leftMargin.length));
           printer.style("b").text(leftMargin + formatLeftRight("Total Amount:", toAmount(grandTotalAmount), lineWidth - leftMargin.length));
           printer.style("normal").text(leftMargin + "------------------------------------------");
-          printer.align("ct").text("Thank to visit Jannaat Lounge");
-          printer.text(" ");
-          printer.text("Online Order/Home Delivery: +66-839194134");
-          printer.text("Whatsapp: +66-839194134");
-          printer.text("Facebook:");
-          printer.text("Insta: jannaatloungeofficial");
-          const websiteUrl = "http://jannaatlounge.com/";
-          const googleReviewUrl = "https://share.google/tma5NlFbhwb0J5t7C";
+          printer.align("ct").text(`Thank you for visiting ${companyName}`);
+          if (companyPhone) {
+            printer.text(" ");
+            printer.text(`Online Order/Home Delivery: ${companyPhone}`);
+          }
           const finalizeInvoice = () => {
+            printer.align("ct").text("Powered by Cloudnet Softwares");
             printer.style("normal").text(" ").text(" ").cut().close();
             if (typeof ack === "function") {
               ack({ success: true, jobId, printerIp });
             }
           };
 
-          if (typeof printer.qrimage === "function") {
-            printer.text(" ").align("ct").text("Visit our website").text(" ");
+          if (websiteUrl && typeof printer.qrimage === "function") {
+            printer.text(" ").align("ct").text(reviewLabel).text(" ");
             printer.qrimage(websiteUrl, (qrErr) => {
               if (qrErr) {
                 console.error("QR print error:", qrErr);
                 printer.align("ct").text(websiteUrl);
               }
-              printer.text(" ").align("ct").text("Scan this QR for Google Reviews").text(" ");
-              printer.qrimage(googleReviewUrl, (qrErr2) => {
-                if (qrErr2) {
-                  console.error("Google QR print error:", qrErr2);
-                  printer.align("ct").text(googleReviewUrl);
-                }
-                finalizeInvoice();
-              });
+              finalizeInvoice();
             });
+          } else if (websiteUrl) {
+            printer.text(" ").align("ct").text(reviewLabel).text(" ").text(websiteUrl);
+            finalizeInvoice();
           } else {
-            printer.text(" ").align("ct").text("Visit our website").text(" ").text(websiteUrl);
-            printer.text(" ").align("ct").text("Scan this QR for Google Reviews").text(" ").text(googleReviewUrl);
             finalizeInvoice();
           }
           return;
@@ -365,7 +365,7 @@ io.on("connection", (socket) => {
             .text(`Start Time: ${shishaStartTime}`)
             .text(`End Time: ${shishaEndTime}`)
             .text("------------------------")
-            .text("Thanks for Choosing jannaat lounge")
+            .text(`Thanks for choosing ${companyName}`)
             .text("Wifi Name :")
             .text("Wifi Password:")
             .text(" ")

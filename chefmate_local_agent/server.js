@@ -9,17 +9,8 @@ escpos.Network = require("escpos-network");
 const app = express();
 const server = http.createServer(app);
 
-// ✅ CORS Configuration
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.1.10:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
-// ✅ JSON Parser
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 
 const io = new Server(server, {
   cors: {
@@ -147,7 +138,7 @@ io.on("connection", (socket) => {
       const printResults = [];
       let completedCount = 0;
 
-      allPrinterIps.forEach((printerConfig, idx) => {error log file use that and show all error in well format
+      allPrinterIps.forEach((printerConfig, idx) => {
         const printerIp = printerConfig.ip || printerConfig.printer_ip;
         const port = parseInt(printerConfig.port || printerConfig.printer_port || "9100", 10);
         const terminalId = printerConfig.terminal_id || printerConfig.terminalId || `Printer-${idx + 1}`;
@@ -374,6 +365,18 @@ io.on("connection", (socket) => {
 
           const companyAddress = getValue(payload, ["companyAddress", "address"], process.env.COMPANY_ADDRESS || "");
           const companyPhone = getValue(payload, ["companyPhone", "phone", "phone_number"], process.env.COMPANY_PHONE || "");
+          const companyWebsiteRaw = getValue(
+            payload,
+            ["companyWebsite", "company_website", "website", "web_site", "url"],
+            process.env.COMPANY_WEBSITE || ""
+          );
+          const companyWebsite = String(companyWebsiteRaw || "").trim();
+          const websiteUrl = companyWebsite
+            ? (/^https?:\/\//i.test(companyWebsite) ? companyWebsite : `https://${companyWebsite}`)
+            : "";
+          const reviewLabel = /google|g\.page|maps/i.test(websiteUrl)
+            ? "Scan for Google Review"
+            : "Visit us online";
           const companyTax = getValue(payload, ["companyTaxDetails", "taxDetails", "tax_id", "taxId"], process.env.COMPANY_TAX_DETAILS || "");
 
           const subtotalAmount = Number(getValue(payload, ["subtotal", "subTotal"], 0));
@@ -444,40 +447,56 @@ io.on("connection", (socket) => {
           printer.text(leftMargin + formatLeftRight("Round Off:", toAmount(roundOffAmount), lineWidth - leftMargin.length));
           printer.style("b").text(leftMargin + formatLeftRight("Total Amount:", toAmount(grandTotalAmount), lineWidth - leftMargin.length));
           printer.style("normal").text(leftMargin + "------------------------------------------");
-          printer.align("ct").text("Thank to visit Jannaat Lounge");
-          printer.text(" ");
-          printer.text("Online Order/Home Delivery: +66-839194134");
-          printer.text("Whatsapp: +66-839194134");
-          printer.text("Facebook:");
-          printer.text("Insta: jannaatloungeofficial");
-          const websiteUrl = "http://jannaatlounge.com/";
-          const googleReviewUrl = "https://share.google/tma5NlFbhwb0J5t7C";
+          printer.align("ct").text(`Thank you for visiting ${companyName}`);
+          if (companyPhone) {
+            printer.text(" ");
+            printer.text(`Online Order/Home Delivery: ${companyPhone}`);
+          }
+
           const finalizeInvoice = () => {
+            printer.align("ct").text("------------------------------------------");
+            printer.align("ct").text("Powered by Cloudnet Softwares");
             printer.style("normal").text(" ").text(" ").cut().close();
             if (typeof ack === "function") {
               ack({ success: true, jobId, printerIp });
             }
           };
 
-          if (typeof printer.qrimage === "function") {
-            printer.text(" ").align("ct").text("Visit our website").text(" ");
-            printer.qrimage(websiteUrl, (qrErr) => {
-              if (qrErr) {
-                console.error("QR print error:", qrErr);
-                printer.align("ct").text(websiteUrl);
+          if (websiteUrl) {
+            printer.text(" ").align("ct").text(reviewLabel).text(" ");
+
+            if (typeof printer.qrcode === "function") {
+              try {
+                printer.qrcode(websiteUrl, 6, "M", 6);
+                finalizeInvoice();
+              } catch (nativeQrErr) {
+                console.error("Native QR print error:", nativeQrErr);
+                if (typeof printer.qrimage === "function") {
+                  printer.qrimage(websiteUrl, (qrErr) => {
+                    if (qrErr) {
+                      console.error("QR image print error:", qrErr);
+                      printer.align("ct").text(websiteUrl);
+                    }
+                    finalizeInvoice();
+                  });
+                } else {
+                  printer.align("ct").text(websiteUrl);
+                  finalizeInvoice();
+                }
               }
-              printer.text(" ").align("ct").text("Scan this QR for Google Reviews").text(" ");
-              printer.qrimage(googleReviewUrl, (qrErr2) => {
-                if (qrErr2) {
-                  console.error("Google QR print error:", qrErr2);
-                  printer.align("ct").text(googleReviewUrl);
+            } else if (typeof printer.qrimage === "function") {
+              printer.qrimage(websiteUrl, (qrErr) => {
+                if (qrErr) {
+                  console.error("QR image print error:", qrErr);
+                  printer.align("ct").text(websiteUrl);
                 }
                 finalizeInvoice();
               });
-            });
+            } else {
+              printer.align("ct").text(websiteUrl);
+              finalizeInvoice();
+            }
           } else {
-            printer.text(" ").align("ct").text("Visit our website").text(" ").text(websiteUrl);
-            printer.text(" ").align("ct").text("Scan this QR for Google Reviews").text(" ").text(googleReviewUrl);
             finalizeInvoice();
           }
           return;
@@ -542,7 +561,7 @@ io.on("connection", (socket) => {
             .text(`Start Time: ${shishaStartTime}`)
             .text(`End Time: ${shishaEndTime}`)
             .text("------------------------")
-            .text("Thanks for Choosing jannaat lounge")
+            .text(`Thanks for choosing ${companyName}`)
             .text("Wifi Name :")
             .text("Wifi Password:")
             .text(" ")
@@ -609,17 +628,19 @@ app.post("/print-kot", async (req, res) => {
     console.error("Print-kot error:", error);
     res.status(500).json({
       success: false,
-      message: "Error processing print job",
-      error: error.message
+      message: "Error processing print job"
     });
   }
 });
-
 /**
  * Health check endpoint
  */
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "agent running", port: process.env.LOCAL_AGENT_PORT || 5010 });
+  res.json({
+    success: true,
+    status: "ok",
+    service: "chefmate-local-agent"
+  });
 });
 
 const PORT = process.env.LOCAL_AGENT_PORT || 5010;

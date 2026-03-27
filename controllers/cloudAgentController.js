@@ -1,5 +1,6 @@
 const ioClient = require("socket.io-client");
 const { db } = require("../config/dbconnection");
+const { getRequestShopId } = require("../helpers/shopScope");
 
 let socket;
 
@@ -76,14 +77,32 @@ const buildSamplePayload = (jobIdPrefix, overrides = {}) => {
   };
 };
 
-const fetchCompanyName = async () => {
+const fetchCompanyName = async (shopId = null) => {
   let companyName = "Restaurant Name";
   try {
-    const [companyRows] = await db.query(
-      `SELECT name FROM companyinfo ORDER BY id DESC LIMIT 1`
-    );
-    if (companyRows && companyRows.length > 0) {
-      companyName = companyRows[0].name;
+    const profileQuery = shopId
+      ? `SELECT name
+         FROM company_profile
+         WHERE is_active = 1 AND shop_id = ?
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1`
+      : `SELECT name
+         FROM company_profile
+         WHERE is_active = 1
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1`;
+    const [profileRows] = await db.query(profileQuery, shopId ? [shopId] : []);
+
+    if (profileRows && profileRows.length > 0) {
+      companyName = profileRows[0].name;
+    } else {
+      const companyQuery = shopId
+        ? `SELECT name FROM companyinfo WHERE shop_id = ? ORDER BY id DESC LIMIT 1`
+        : `SELECT name FROM companyinfo ORDER BY id DESC LIMIT 1`;
+      const [companyRows] = await db.query(companyQuery, shopId ? [shopId] : []);
+      if (companyRows && companyRows.length > 0) {
+        companyName = companyRows[0].name;
+      }
     }
   } catch (dbErr) {
     console.error("Failed to fetch company name:", dbErr.message);
@@ -92,14 +111,57 @@ const fetchCompanyName = async () => {
   return companyName;
 };
 
-const fetchCompanyInfo = async () => {
+const fetchCompanyInfo = async (shopId = null) => {
   try {
-    const [rows] = await db.query(
-      `SELECT name, tax_id, phone_number, address
-       FROM companyinfo
-       ORDER BY id DESC
-       LIMIT 1`
-    );
+    const profileQuery = shopId
+      ? `SELECT name, tax_id, phone_number, address, website
+         FROM company_profile
+         WHERE is_active = 1 AND shop_id = ?
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1`
+      : `SELECT name, tax_id, phone_number, address, website
+         FROM company_profile
+         WHERE is_active = 1
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1`;
+    const [profileRows] = await db.query(profileQuery, shopId ? [shopId] : []);
+
+    if (profileRows && profileRows.length > 0) {
+      return profileRows[0];
+    }
+
+    let rows = [];
+    try {
+      const companyQuery = shopId
+        ? `SELECT name, tax_id, phone_number, address, website
+           FROM companyinfo
+           WHERE shop_id = ?
+           ORDER BY id DESC
+           LIMIT 1`
+        : `SELECT name, tax_id, phone_number, address, website
+           FROM companyinfo
+           ORDER BY id DESC
+           LIMIT 1`;
+      const [companyRows] = await db.query(companyQuery, shopId ? [shopId] : []);
+      rows = companyRows;
+    } catch (companyInfoErr) {
+      if (!String(companyInfoErr.message || "").toLowerCase().includes("unknown column")) {
+        throw companyInfoErr;
+      }
+
+      const companyQuery = shopId
+        ? `SELECT name, tax_id, phone_number, address
+           FROM companyinfo
+           WHERE shop_id = ?
+           ORDER BY id DESC
+           LIMIT 1`
+        : `SELECT name, tax_id, phone_number, address
+           FROM companyinfo
+           ORDER BY id DESC
+           LIMIT 1`;
+      const [companyRows] = await db.query(companyQuery, shopId ? [shopId] : []);
+      rows = companyRows.map((row) => ({ ...row, website: "" }));
+    }
 
     if (rows && rows.length > 0) {
       return rows[0];
@@ -112,7 +174,8 @@ const fetchCompanyInfo = async () => {
     name: "Restaurant Name",
     tax_id: "",
     phone_number: "",
-    address: ""
+    address: "",
+    website: ""
   };
 };
 
@@ -130,7 +193,7 @@ const fetchBillItems = async (billId) => {
   );
 
   const [orderIdRows] = await db.query(
-    `SELECT item_name, quantity, total_price
+    `SELECT item_name, quantity, total_price, invoice_number
      FROM order_items
      WHERE order_id = ?`,
     [billId]
@@ -142,7 +205,7 @@ const fetchBillItems = async (billId) => {
 
   try {
     const [legacyRows] = await db.query(
-      `SELECT item_name, quantity, total_price
+      `SELECT item_name, quantity, total_price, invoice_number
        FROM order_items
        WHERE bill_id = ?`,
       [billId]
@@ -163,13 +226,36 @@ const fetchBillItems = async (billId) => {
 
   const placeholders = invoiceCandidates.map(() => '?').join(', ');
   const [invoiceRows] = await db.query(
-    `SELECT item_name, quantity, total_price
+    `SELECT item_name, quantity, total_price, invoice_number
      FROM order_items
      WHERE invoice_number IN (${placeholders})`,
     invoiceCandidates
   );
 
   return invoiceRows;
+};
+
+const resolveInvoiceNumberForPayload = async (payload = {}) => {
+  const explicitInvoice = String(payload.invoiceNo || payload.invoice_no || "").trim();
+  if (explicitInvoice) {
+    return explicitInvoice;
+  }
+
+  const rawBillId = payload.billId ?? payload.bill_id;
+  const billId = Number(rawBillId);
+  if (!billId || Number.isNaN(billId)) {
+    return "";
+  }
+
+  const [[billRow]] = await db.query(
+    `SELECT inv_number
+     FROM final_bill
+     WHERE id = ?
+     LIMIT 1`,
+    [billId]
+  );
+
+  return String(billRow?.inv_number || "").trim();
 };
 
 const normalizeGroup = (value) => {
@@ -240,6 +326,7 @@ const groupItemsByGroup = (items) => {
 
 const sendPrintJob = async (req, res) => {
   const payload = req.body || {};
+  const shopId = getRequestShopId(req) || Number(payload.shop_id || payload.shopId || 0) || null;
 
   if (!payload || !payload.jobId) {
     return res.status(400).json({
@@ -249,7 +336,34 @@ const sendPrintJob = async (req, res) => {
   }
 
   try {
-    const result = await sendPrintJobPayload(payload);
+    const resolvedInvoiceNo = await resolveInvoiceNumberForPayload(payload);
+    const companyInfo = await fetchCompanyInfo(shopId);
+    const printPayload = resolvedInvoiceNo
+      ? {
+          ...payload,
+          shop_id: shopId || payload.shop_id || payload.shopId || null,
+          shopId: shopId || payload.shopId || payload.shop_id || null,
+          companyName: payload.companyName || companyInfo.name || "Restaurant Name",
+          companyAddress: payload.companyAddress || companyInfo.address || "",
+          companyPhone: payload.companyPhone || companyInfo.phone_number || "",
+          companyWebsite: payload.companyWebsite || companyInfo.website || "",
+          tax_id: payload.tax_id || companyInfo.tax_id || "",
+          invoiceNo: resolvedInvoiceNo,
+          invoice_no: resolvedInvoiceNo,
+          bill_id: resolvedInvoiceNo
+        }
+      : {
+          ...payload,
+          shop_id: shopId || payload.shop_id || payload.shopId || null,
+          shopId: shopId || payload.shopId || payload.shop_id || null,
+          companyName: payload.companyName || companyInfo.name || "Restaurant Name",
+          companyAddress: payload.companyAddress || companyInfo.address || "",
+          companyPhone: payload.companyPhone || companyInfo.phone_number || "",
+          companyWebsite: payload.companyWebsite || companyInfo.website || "",
+          tax_id: payload.tax_id || companyInfo.tax_id || ""
+        };
+
+    const result = await sendPrintJobPayload(printPayload);
 
     return res.json({
       success: true,
@@ -402,6 +516,7 @@ const sendKotToBoth = async (req, res) => {
 const sendBillToCashier = async (req, res) => {
   const payload = req.body || {};
   const jobId = payload.jobId || `bill-${Date.now()}`;
+  const shopId = getRequestShopId(req) || Number(payload.shop_id || payload.shopId || 0) || null;
 
   if (!payload.table || !Array.isArray(payload.items) || payload.items.length === 0) {
     return res.status(400).json({
@@ -412,23 +527,27 @@ const sendBillToCashier = async (req, res) => {
 
   try {
     // Fetch company name
-    let companyName = "Restaurant Name";
-    try {
-      const [companyRows] = await db.query(
-        `SELECT name FROM companyinfo ORDER BY id DESC LIMIT 1`
-      );
-      if (companyRows && companyRows.length > 0) {
-        companyName = companyRows[0].name;
-      }
-    } catch (dbErr) {
-      console.error("Failed to fetch company name:", dbErr.message);
-    }
+    const companyInfo = await fetchCompanyInfo(shopId);
 
+    const resolvedInvoiceNo = await resolveInvoiceNumberForPayload(payload);
     const result = await sendPrintJobPayload({
       ...payload,
+      ...(resolvedInvoiceNo
+        ? {
+            invoiceNo: resolvedInvoiceNo,
+            invoice_no: resolvedInvoiceNo,
+            bill_id: resolvedInvoiceNo
+          }
+        : {}),
+      shop_id: shopId || payload.shop_id || payload.shopId || null,
+      shopId: shopId || payload.shopId || payload.shop_id || null,
       jobId,
       target: "cashier",
-      companyName
+      companyName: payload.companyName || companyInfo.name || "Restaurant Name",
+      companyAddress: payload.companyAddress || companyInfo.address || "",
+      companyPhone: payload.companyPhone || companyInfo.phone_number || "",
+      companyWebsite: payload.companyWebsite || companyInfo.website || "",
+      tax_id: payload.tax_id || companyInfo.tax_id || ""
     });
 
     return res.json({
@@ -447,7 +566,9 @@ const sendBillToCashier = async (req, res) => {
 const sendInvoiceByBillId = async (req, res) => {
   const rawBillId = req.body?.billId ?? req.params?.billId ?? req.query?.billId;
   const billId = Number(rawBillId);
+  const requestedInvoiceNo = String(req.body?.invoiceNo || req.body?.invoice_no || '').trim();
   const machineUuid = req.body?.machine_uuid ?? req.body?.user_uuid ?? req.query?.machine_uuid;
+  const requestShopId = getRequestShopId(req);
 
   if (!billId || Number.isNaN(billId)) {
     return res.status(400).json({
@@ -458,7 +579,7 @@ const sendInvoiceByBillId = async (req, res) => {
 
   try {
     const [[billRow]] = await db.query(
-      `SELECT id, inv_number, inv_date, inv_time, table_number, subtotal, subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode
+      `SELECT id, shop_id, inv_number, inv_date, inv_time, table_number, subtotal, subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode
        FROM final_bill
        WHERE id = ?
        LIMIT 1`,
@@ -481,7 +602,7 @@ const sendInvoiceByBillId = async (req, res) => {
       });
     }
 
-    const companyInfo = await fetchCompanyInfo();
+    const companyInfo = await fetchCompanyInfo(requestShopId || billRow.shop_id || null);
 
     // ✅ Single mode printer resolution for cashier invoice printing
     let cashierPrinter = null;
@@ -527,6 +648,12 @@ const sendInvoiceByBillId = async (req, res) => {
       });
     }
 
+    const resolvedInvoiceNumber =
+      requestedInvoiceNo ||
+      billRow.inv_number ||
+      itemRows.find((item) => item?.invoice_number && String(item.invoice_number).trim() !== '')?.invoice_number ||
+      String(billRow.id);
+
     const items = itemRows.map((item) => {
       const quantity = Number(item.quantity || 0);
       const lineTotal = Number(item.total_price || 0);
@@ -545,8 +672,9 @@ const sendInvoiceByBillId = async (req, res) => {
       target: "cashier",
       mode: "single",
       printType: "invoice",
-      bill_id: billRow.id,
-      invoiceNo: billRow.inv_number || String(billRow.id),
+      billId: billRow.id,
+      bill_id: String(resolvedInvoiceNumber),
+      invoiceNo: String(resolvedInvoiceNumber),
       table: billRow.table_number,
       date: billRow.inv_date,
       time: billRow.inv_time,
@@ -558,7 +686,10 @@ const sendInvoiceByBillId = async (req, res) => {
       companyName: companyInfo.name || "Restaurant Name",
       companyAddress: companyInfo.address || "",
       companyPhone: companyInfo.phone_number || "",
+      companyWebsite: companyInfo.website || "",
       tax_id: companyInfo.tax_id || "",
+      shop_id: requestShopId || billRow.shop_id || null,
+      shopId: requestShopId || billRow.shop_id || null,
       items,
       printerIp: cashierPrinter.printer_ip,
       printerPort: cashierPrinter.printer_port,

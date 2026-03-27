@@ -19,22 +19,21 @@ const websocketManager = require('../helpers/websocketManager');
  */
 const createNotification = async (req, res) => {
   try {
-    const { title, message, notificationType, targetType, shopIds, userIds, priority, scheduledFor, expiresAt } = req.body;
-    let imageUrl = null;
-    let imagePath = null;
+    let { title, message, notificationType, targetType, shopIds, userIds, priority, scheduledFor, expiresAt } = req.body;
 
+    // FormData sends arrays/objects as JSON strings — parse them
+    if (typeof shopIds === 'string') {
+      try { shopIds = JSON.parse(shopIds); } catch { shopIds = []; }
+    }
+    if (typeof userIds === 'string') {
+      try { userIds = JSON.parse(userIds); } catch { userIds = []; }
+    }
     // Validate required fields
     if (!title || !message) {
       return res.status(400).json({
         success: false,
         error: 'Title and message are required'
       });
-    }
-
-    // Handle image upload if provided
-    if (req.file) {
-      imagePath = `/uploads/notifications/${req.file.filename}`;
-      imageUrl = `${process.env.BASE_URL || 'http://localhost:4402'}${imagePath}`;
     }
 
     // Validate target type
@@ -56,17 +55,15 @@ const createNotification = async (req, res) => {
 
     const insertQuery = `
       INSERT INTO notifications (
-        title, message, image_url, image_path, notification_type,
+        title, message, notification_type,
         target_type, shop_ids, user_ids, created_by, priority,
         scheduled_for, expires_at, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
       title,
       message,
-      imageUrl,
-      imagePath,
       notificationType || 'general',
       targetType || 'all',
       targetType === 'specific_shops' ? JSON.stringify(shopIds) : null,
@@ -94,8 +91,6 @@ const createNotification = async (req, res) => {
       id: result.insertId,
       title,
       message,
-      imageUrl,
-      imagePath,
       notificationType: notificationType || 'general',
       targetType: targetType || 'all',
       priority: priority || 'normal',

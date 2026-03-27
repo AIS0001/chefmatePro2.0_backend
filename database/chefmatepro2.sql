@@ -505,6 +505,7 @@ DELIMITER ;
 --
 DROP VIEW IF EXISTS `company_profile_basic`;
 CREATE TABLE IF NOT EXISTS `company_profile_basic` (
+  `id` int DEFAULT NULL
 );
 
 -- --------------------------------------------------------
@@ -515,6 +516,7 @@ CREATE TABLE IF NOT EXISTS `company_profile_basic` (
 --
 DROP VIEW IF EXISTS `company_profile_display`;
 CREATE TABLE IF NOT EXISTS `company_profile_display` (
+  `id` int DEFAULT NULL
 );
 
 -- --------------------------------------------------------

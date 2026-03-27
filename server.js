@@ -98,9 +98,11 @@ app.use((req, res, next) => {
   return bodyParser.urlencoded({ limit: "30mb", extended: true })(req, res, next);
 });
 
-// Skip express-fileUpload for multer routes (/addnewproduct)
+// Skip express-fileUpload for all multer-handled routes (addnewproduct, notifications, companyinfo uploads)
+// Multer routes handle their own multipart parsing; express-fileupload must not consume the stream first.
 app.use((req, res, next) => {
-  if (isMultipartRequest(req) && req.path.includes('/addnewproduct')) {
+  const multerPaths = ['/addnewproduct', 'companyinfo'];
+  if (isMultipartRequest(req) && multerPaths.some((p) => req.path.includes(p))) {
     return next();
   }
   return fileUpload({ limits: { fileSize: 30 * 1024 * 1024 } })(req, res, next);
