@@ -189,7 +189,7 @@ io.on("connection", (socket) => {
           const lineWidth = 42;
           const separator = "-".repeat(lineWidth);
           const leftMargin = "  "; // 2 spaces for left margin
-          const billId = getValue(payload, ["bill_id", "billId", "invoiceNo", "invoice_no"], jobId);
+          const invoiceNo = getValue(payload, ["invoiceNo", "invoice_no", "bill_id", "billId"], jobId);
           const tableNo = getValue(payload, ["table", "table_number", "tableNo", "tablenumber"], "-");
           const billDate = getValue(payload, ["date", "inv_date", "billDate"], dateStr);
           const billTime = getValue(payload, ["time", "inv_time", "billTime"], now.toLocaleTimeString('en-GB'));
@@ -225,7 +225,7 @@ io.on("connection", (socket) => {
           if (companyTax) printer.text(`Tax:- ${companyTax}`);
 
           printer.text(" ").align("lt");
-          printer.text(leftMargin + formatLeftRight(`Bill ID: ${billId}`, `Table ${tableNo}`, lineWidth - leftMargin.length));
+          printer.text(leftMargin + formatLeftRight(`Invoice No: ${invoiceNo}`, `Table ${tableNo}`, lineWidth - leftMargin.length));
           printer.text(leftMargin + formatLeftRight(`Date: ${billDate}`, `Time: ${billTime}`, lineWidth - leftMargin.length));
           printer.text(leftMargin + `Mode: ${paymentMode}`);
           printer.text(leftMargin + separator);

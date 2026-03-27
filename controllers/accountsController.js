@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const db = require('../config/dbconnection1');
+const { requireShopId } = require('../helpers/shopScope');
 
 /**
  * ACCOUNTS ANALYTICS CONTROLLER
@@ -16,6 +17,9 @@ const db = require('../config/dbconnection1');
  */
 const getTodaySalesSummary = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const today = new Date().toISOString().split('T')[0];
     
     const query = `
@@ -28,12 +32,13 @@ const getTodaySalesSummary = async (req, res) => {
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'upi' THEN grand_total ELSE 0 END), 0) as upi_sales,
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'online' THEN grand_total ELSE 0 END), 0) as online_sales
       FROM final_bill 
-      WHERE DATE(setup_date) = ? 
+      WHERE shop_id = ?
+        AND DATE(setup_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
     
-    const [results] = await db.query(query, [today]);
+    const [results] = await db.query(query, [shopId, today]);
     const summary = results[0];
     
     res.json({
@@ -66,6 +71,9 @@ const getTodaySalesSummary = async (req, res) => {
  */
 const getWeeklySalesSummary = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         DATE(setup_date) as sale_date,
@@ -73,14 +81,15 @@ const getWeeklySalesSummary = async (req, res) => {
         COUNT(*) as total_orders,
         COALESCE(SUM(grand_total), 0) as total_sales
       FROM final_bill 
-      WHERE setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      WHERE shop_id = ?
+        AND setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
       GROUP BY DATE(setup_date), DAYNAME(setup_date)
       ORDER BY sale_date DESC
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId]);
     
     const totalSales = results.reduce((sum, day) => sum + parseFloat(day.total_sales), 0);
     const totalOrders = results.reduce((sum, day) => sum + day.total_orders, 0);
@@ -115,6 +124,9 @@ const getWeeklySalesSummary = async (req, res) => {
  */
 const getMonthlySalesSummary = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         COUNT(*) as total_orders,
@@ -126,13 +138,14 @@ const getMonthlySalesSummary = async (req, res) => {
         DAY(LAST_DAY(CURDATE())) as days_in_month,
         DAY(CURDATE()) as current_day
       FROM final_bill 
-      WHERE YEAR(inv_date) = YEAR(CURDATE()) 
+      WHERE shop_id = ?
+        AND YEAR(inv_date) = YEAR(CURDATE()) 
         AND MONTH(inv_date) = MONTH(CURDATE())
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId]);
     const summary = results[0];
     
     res.json({
@@ -166,6 +179,9 @@ const getMonthlySalesSummary = async (req, res) => {
  */
 const getDateRangeSalesSummary = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { startDate, endDate } = req.query;
     
     if (!startDate || !endDate) {
@@ -187,12 +203,13 @@ const getDateRangeSalesSummary = async (req, res) => {
         MIN(DATE(setup_date)) as first_sale_date,
         MAX(DATE(setup_date)) as last_sale_date
       FROM final_bill 
-      WHERE DATE(setup_date) BETWEEN ? AND ?
+      WHERE shop_id = ?
+        AND DATE(setup_date) BETWEEN ? AND ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
     
-    const [results] = await db.query(query, [startDate, endDate]);
+    const [results] = await db.query(query, [shopId, startDate, endDate]);
     const summary = results[0];
     
     const daysDiff = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
@@ -234,6 +251,9 @@ const getDateRangeSalesSummary = async (req, res) => {
  */
 const getRevenueComparison = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     
@@ -242,7 +262,7 @@ const getRevenueComparison = async (req, res) => {
         'today' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
+      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
       
@@ -250,7 +270,7 @@ const getRevenueComparison = async (req, res) => {
         'yesterday' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
+      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
       
@@ -258,7 +278,7 @@ const getRevenueComparison = async (req, res) => {
         'last_7_days' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) 
+      WHERE shop_id = ? AND setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) 
         AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
@@ -267,7 +287,7 @@ const getRevenueComparison = async (req, res) => {
         'this_month' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE YEAR(inv_date) = YEAR(CURDATE()) 
+      WHERE shop_id = ? AND YEAR(inv_date) = YEAR(CURDATE()) 
         AND MONTH(inv_date) = MONTH(CURDATE())
         AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
@@ -277,12 +297,12 @@ const getRevenueComparison = async (req, res) => {
         'last_month' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE YEAR(inv_date) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+      WHERE shop_id = ? AND YEAR(inv_date) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
         AND MONTH(inv_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
         AND LOWER(payment_mode) != 'entertainment' AND status != 2
     `;
     
-    const [results] = await db.query(query, [today, yesterday]);
+    const [results] = await db.query(query, [shopId, today, shopId, yesterday, shopId, shopId, shopId]);
     
     const revenueData = {};
     results.forEach(row => {
@@ -338,6 +358,9 @@ const getRevenueComparison = async (req, res) => {
  */
 const getHourlySalesDistribution = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const today = new Date().toISOString().split('T')[0];
     
     const query = `
@@ -346,14 +369,15 @@ const getHourlySalesDistribution = async (req, res) => {
         COUNT(*) as orders,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE DATE(setup_date) = ?
+      WHERE shop_id = ?
+        AND DATE(setup_date) = ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
       GROUP BY HOUR(setup_date)
       ORDER BY hour
     `;
     
-    const [results] = await db.query(query, [today]);
+    const [results] = await db.query(query, [shopId, today]);
     
     // Create 24-hour array with zeros
     const hourlyData = Array.from({ length: 24 }, (_, i) => ({
@@ -402,6 +426,9 @@ const getHourlySalesDistribution = async (req, res) => {
  */
 const getPaymentModeDistribution = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { period = 'today' } = req.query;
     
     let dateCondition = '';
@@ -425,14 +452,15 @@ const getPaymentModeDistribution = async (req, res) => {
         COUNT(*) as transaction_count,
         COALESCE(SUM(grand_total), 0) as total_amount
       FROM final_bill 
-      WHERE ${dateCondition}
+      WHERE shop_id = ?
+        AND ${dateCondition}
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
       GROUP BY LOWER(payment_mode)
       ORDER BY total_amount DESC
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId]);
     
     const totalRevenue = results.reduce((sum, row) => sum + parseFloat(row.total_amount), 0);
     
@@ -470,6 +498,9 @@ const getPaymentModeDistribution = async (req, res) => {
  */
 const getTopSellingItems = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { limit = 10, period = 'month' } = req.query;
     
     let dateCondition = '';
@@ -498,7 +529,9 @@ const getTopSellingItems = async (req, res) => {
       FROM order_items oi
       INNER JOIN items i ON oi.item_id = i.id
       INNER JOIN final_bill fb ON oi.bill_id = fb.id
-      WHERE fb.status != 2 
+      WHERE fb.shop_id = ?
+        AND i.shop_id = ?
+        AND fb.status != 2 
         AND LOWER(fb.payment_mode) != 'entertainment'
         ${dateCondition}
       GROUP BY i.id, i.item_name, i.category
@@ -506,7 +539,7 @@ const getTopSellingItems = async (req, res) => {
       LIMIT ?
     `;
     
-    const [results] = await db.query(query, [parseInt(limit)]);
+    const [results] = await db.query(query, [shopId, shopId, parseInt(limit, 10)]);
     
     res.json({
       success: true,
@@ -537,6 +570,9 @@ const getTopSellingItems = async (req, res) => {
  */
 const getCategoryPerformance = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { period = 'month' } = req.query;
     
     let dateCondition = '';
@@ -563,14 +599,16 @@ const getCategoryPerformance = async (req, res) => {
       FROM order_items oi
       INNER JOIN items i ON oi.item_id = i.id
       INNER JOIN final_bill fb ON oi.bill_id = fb.id
-      WHERE fb.status != 2 
+      WHERE fb.shop_id = ?
+        AND i.shop_id = ?
+        AND fb.status != 2 
         AND LOWER(fb.payment_mode) != 'entertainment'
         ${dateCondition}
       GROUP BY i.category
       ORDER BY total_revenue DESC
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId, shopId]);
     
     const totalRevenue = results.reduce((sum, row) => sum + parseFloat(row.total_revenue), 0);
     
@@ -606,6 +644,9 @@ const getCategoryPerformance = async (req, res) => {
  */
 const getProfitLossSummary = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { period = 'month' } = req.query;
     
     let dateCondition = '';
@@ -627,7 +668,8 @@ const getProfitLossSummary = async (req, res) => {
     const revenueQuery = `
       SELECT COALESCE(SUM(grand_total), 0) as total_revenue
       FROM final_bill 
-      WHERE ${dateCondition}
+      WHERE shop_id = ?
+        AND ${dateCondition}
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
@@ -649,13 +691,14 @@ const getProfitLossSummary = async (req, res) => {
     }
     
     const purchaseQuery = `
-      SELECT COALESCE(SUM(netAmount), 0) as total_purchases
-      FROM inventory 
-      WHERE ${purchaseCondition}
+      SELECT COALESCE(SUM(inv.netAmount), 0) as total_purchases
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ? AND ${purchaseCondition.replace(/created_at/g, 'inv.created_at')}
     `;
     
-    const [revenueResults] = await db.query(revenueQuery);
-    const [purchaseResults] = await db.query(purchaseQuery);
+    const [revenueResults] = await db.query(revenueQuery, [shopId]);
+    const [purchaseResults] = await db.query(purchaseQuery, [shopId]);
     
     const revenue = parseFloat(revenueResults[0].total_revenue);
     const purchases = parseFloat(purchaseResults[0].total_purchases);
@@ -693,6 +736,9 @@ const getProfitLossSummary = async (req, res) => {
  */
 const getAccountsDashboard = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     
@@ -702,19 +748,21 @@ const getAccountsDashboard = async (req, res) => {
         COALESCE(SUM(grand_total), 0) as total,
         COUNT(*) as orders
       FROM final_bill 
-      WHERE DATE(setup_date) = ? 
+      WHERE shop_id = ?
+        AND DATE(setup_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
-    `, [today]);
+    `, [shopId, today]);
     
     // Yesterday's Sales
     const [yesterdaySales] = await db.query(`
       SELECT COALESCE(SUM(grand_total), 0) as total
       FROM final_bill 
-      WHERE DATE(setup_date) = ? 
+      WHERE shop_id = ?
+        AND DATE(setup_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
-    `, [yesterday]);
+    `, [shopId, yesterday]);
     
     // This Month Sales
     const [monthSales] = await db.query(`
@@ -722,19 +770,22 @@ const getAccountsDashboard = async (req, res) => {
         COALESCE(SUM(grand_total), 0) as total,
         COUNT(*) as orders
       FROM final_bill 
-      WHERE YEAR(inv_date) = YEAR(CURDATE()) 
+      WHERE shop_id = ?
+        AND YEAR(inv_date) = YEAR(CURDATE()) 
         AND MONTH(inv_date) = MONTH(CURDATE())
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
-    `);
+    `, [shopId]);
     
     // This Month Purchases
     const [monthPurchases] = await db.query(`
-      SELECT COALESCE(SUM(netAmount), 0) as total
-      FROM inventory 
-      WHERE YEAR(created_at) = YEAR(CURDATE()) 
-        AND MONTH(created_at) = MONTH(CURDATE())
-    `);
+      SELECT COALESCE(SUM(inv.netAmount), 0) as total
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ?
+        AND YEAR(inv.created_at) = YEAR(CURDATE()) 
+        AND MONTH(inv.created_at) = MONTH(CURDATE())
+    `, [shopId]);
     
     // Payment Mode Breakdown (Today)
     const [paymentModes] = await db.query(`
@@ -743,11 +794,12 @@ const getAccountsDashboard = async (req, res) => {
         COALESCE(SUM(grand_total), 0) as amount,
         COUNT(*) as count
       FROM final_bill 
-      WHERE DATE(setup_date) = ?
+      WHERE shop_id = ?
+        AND DATE(setup_date) = ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
       GROUP BY LOWER(payment_mode)
-    `, [today]);
+    `, [shopId, today]);
     
     const todayGrowth = yesterdaySales[0].total > 0 
       ? (((todaySales[0].total - yesterdaySales[0].total) / yesterdaySales[0].total) * 100).toFixed(2)

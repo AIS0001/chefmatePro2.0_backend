@@ -5,6 +5,12 @@ const { db, format } = require('../config/dbconnection');
 const jwt = require('jsonwebtoken');
 const jwt_secret = 'setupnewkey';
 
+const resolveShopId = (req) => {
+  const candidate = req.query?.shop_id || req.user?.shop_id || req.shop_id;
+  const parsed = Number.parseInt(candidate, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 // Cache: tables that have a shop_id column (loaded once on first request)
 let _shopIdTables = null;
 const getShopIdTables = async () => {
@@ -37,7 +43,18 @@ const combolistwithWhere = async (req, res) => {
     const { where } = req.query;
     const table = req.params.tablename;
     const id = req.params.groupby;
-    const query = `SELECT * FROM ?? ${where ? `WHERE ${where}` : ""} GROUP BY ??`;
+    const shopTables = await getShopIdTables();
+    const shopId = resolveShopId(req);
+
+    const conditions = [];
+    if (where) {
+      conditions.push(where);
+    }
+    if (shopTables.has(table) && shopId) {
+      conditions.push(`shop_id = ${shopId}`);
+    }
+
+    const query = `SELECT * FROM ?? ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} GROUP BY ??`;
     const formattedQuery = format(query, [table, id]);
     const [results] = await db.query(formattedQuery);
     res.json(results);
@@ -66,8 +83,22 @@ const combolist = async (req, res) => {
   try {
     const table = req.params.tablename;
     const id = req.params.groupby;
-    const query = format(`SELECT * FROM ?? GROUP BY ??`, [table, id]);
-    const [results] = await db.query(query);
+    const shopTables = await getShopIdTables();
+    const shopId = resolveShopId(req);
+
+    let query = `SELECT * FROM ??`;
+    const queryParams = [table];
+
+    if (shopTables.has(table) && shopId) {
+      query += ` WHERE shop_id = ?`;
+      queryParams.push(shopId);
+    }
+
+    query += ` GROUP BY ??`;
+    queryParams.push(id);
+
+    const formattedQuery = format(query, queryParams);
+    const [results] = await db.query(formattedQuery);
     res.json(results);
   } catch (err) {
     console.error('Error in combolist:', err);
@@ -105,13 +136,78 @@ const fetchData = async (req, res) => {
       values.push(value);
     }
 
-    // Auto-inject shop_id filter if user has shop_id and table supports it
-    const userShopId = req.user?.shop_id;
-    if (userShopId) {
+    const resolvedShopId = resolveShopId(req);
+
+    // subcategory has no shop_id column in current schema, so scope via categories.shop_id
+    if (tblname === 'subcategory') {
+      if (!resolvedShopId) {
+        return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: [] });
+      }
+
+      const allowedOrderBy = new Set(['id', 'cat_id', 'subcat']);
+      const safeOrderBy = allowedOrderBy.has(orderby) ? orderby : 'id';
+      const scopedConditions = [];
+      const scopedValues = [];
+
+      for (const [key, value] of params.entries()) {
+        scopedConditions.push(`s.${key} = ?`);
+        scopedValues.push(value);
+      }
+
+      scopedConditions.push('c.shop_id = ?');
+      scopedValues.push(resolvedShopId);
+
+      const whereClause = scopedConditions.length > 0 ? `WHERE ${scopedConditions.join(' AND ')}` : '';
+      const scopedQuery = `
+        SELECT s.*
+        FROM subcategory s
+        INNER JOIN categories c ON c.id = s.cat_id
+        ${whereClause}
+        ORDER BY s.${safeOrderBy}
+      `;
+      const [results] = await db.query(scopedQuery, scopedValues);
+      return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: results });
+    }
+
+    // receipt_vouchers may not have shop_id in some schemas, so scope via customers.shop_id
+    if (tblname === 'receipt_vouchers') {
+      if (!resolvedShopId) {
+        return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: [] });
+      }
+
+      const allowedOrderBy = new Set(['id', 'customer_id', 'payment_date', 'transaction_id', 'created_at']);
+      const safeOrderBy = allowedOrderBy.has(orderby) ? orderby : 'id';
+      const scopedConditions = [];
+      const scopedValues = [];
+
+      for (const [key, value] of params.entries()) {
+        if (key === 'shop_id') continue;
+        scopedConditions.push(`rv.${key} = ?`);
+        scopedValues.push(value);
+      }
+
+      scopedConditions.push('c.shop_id = ?');
+      scopedValues.push(resolvedShopId);
+
+      const whereClause = scopedConditions.length > 0 ? `WHERE ${scopedConditions.join(' AND ')}` : '';
+      const scopedQuery = `
+        SELECT rv.*
+        FROM receipt_vouchers rv
+        INNER JOIN customers c ON c.id = rv.customer_id
+        ${whereClause}
+        ORDER BY rv.${safeOrderBy}
+      `;
+      const [results] = await db.query(scopedQuery, scopedValues);
+      return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: results });
+    }
+
+    // Auto-inject shop_id filter if user has shop_id, table supports it, and not already filtered
+    const shopIdAlreadyFiltered = conditions.some(c => c === 'shop_id = ?');
+    if (resolvedShopId && !shopIdAlreadyFiltered) {
       const shopTables = await getShopIdTables();
       if (shopTables.has(tblname)) {
         conditions.push('shop_id = ?');
-        values.push(userShopId);
+        values.push(resolvedShopId);
       }
     }
 
@@ -139,6 +235,77 @@ const fetchDatanotequal = async (req, res) => {
     for (const [key, value] of params.entries()) {
       conditions.push(`${key} != ?`);
       values.push(value);
+    }
+
+    const resolvedShopId = resolveShopId(req);
+
+    if (tblname === 'subcategory') {
+      if (!resolvedShopId) {
+        return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: [] });
+      }
+
+      const allowedOrderBy = new Set(['id', 'cat_id', 'subcat']);
+      const safeOrderBy = allowedOrderBy.has(orderby) ? orderby : 'id';
+      const scopedConditions = [];
+      const scopedValues = [];
+
+      for (const [key, value] of params.entries()) {
+        scopedConditions.push(`s.${key} != ?`);
+        scopedValues.push(value);
+      }
+
+      scopedConditions.push('c.shop_id = ?');
+      scopedValues.push(resolvedShopId);
+
+      const whereClause = scopedConditions.length > 0 ? `WHERE ${scopedConditions.join(' AND ')}` : '';
+      const scopedQuery = `
+        SELECT s.*
+        FROM subcategory s
+        INNER JOIN categories c ON c.id = s.cat_id
+        ${whereClause}
+        ORDER BY s.${safeOrderBy}
+      `;
+      const [results] = await db.query(scopedQuery, scopedValues);
+      return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: results });
+    }
+
+    if (tblname === 'receipt_vouchers') {
+      if (!resolvedShopId) {
+        return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: [] });
+      }
+
+      const allowedOrderBy = new Set(['id', 'customer_id', 'payment_date', 'transaction_id', 'created_at']);
+      const safeOrderBy = allowedOrderBy.has(orderby) ? orderby : 'id';
+      const scopedConditions = [];
+      const scopedValues = [];
+
+      for (const [key, value] of params.entries()) {
+        if (key === 'shop_id') continue;
+        scopedConditions.push(`rv.${key} != ?`);
+        scopedValues.push(value);
+      }
+
+      scopedConditions.push('c.shop_id = ?');
+      scopedValues.push(resolvedShopId);
+
+      const whereClause = scopedConditions.length > 0 ? `WHERE ${scopedConditions.join(' AND ')}` : '';
+      const scopedQuery = `
+        SELECT rv.*
+        FROM receipt_vouchers rv
+        INNER JOIN customers c ON c.id = rv.customer_id
+        ${whereClause}
+        ORDER BY rv.${safeOrderBy}
+      `;
+      const [results] = await db.query(scopedQuery, scopedValues);
+      return res.status(200).json({ status: 'success', message: 'Data fetched successfully', data: results });
+    }
+
+    if (resolvedShopId) {
+      const shopTables = await getShopIdTables();
+      if (shopTables.has(tblname)) {
+        conditions.push('shop_id = ?');
+        values.push(resolvedShopId);
+      }
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -330,6 +497,11 @@ const checklLineDiscount = async (req, res) => {
 
 // Get order_items_gst joined with item/category/subcategory
 const getOrderItemsGstJoined = async (req, res) => {
+  const resolvedShopId = resolveShopId(req);
+  if (!resolvedShopId) {
+    return res.status(200).json([]);
+  }
+
   const query = `
     SELECT 
       o.*, 
@@ -341,17 +513,19 @@ const getOrderItemsGstJoined = async (req, res) => {
     FROM 
       order_items_gst o
     JOIN 
-      items i ON TRIM(LOWER(o.item_name)) = TRIM(LOWER(i.iname))
+      items i ON TRIM(LOWER(o.item_name)) = TRIM(LOWER(i.iname)) AND i.shop_id = o.shop_id
     LEFT JOIN 
-      categories c ON i.catid = c.id
+      categories c ON i.catid = c.id AND c.shop_id = o.shop_id
     LEFT JOIN 
-      subcategory s ON i.subcatid = s.id
+      subcategory s ON i.subcatid = s.id AND s.cat_id = i.catid
+    WHERE
+      o.shop_id = ?
     ORDER BY 
       o.id DESC
   `;
 
   try {
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [resolvedShopId]);
     res.json(results);
   } catch (err) {
     console.error("JOIN query error:", err);
@@ -359,6 +533,11 @@ const getOrderItemsGstJoined = async (req, res) => {
   }
 };
 const getOrderItemsJoined = async (req, res) => {
+  const resolvedShopId = resolveShopId(req);
+  if (!resolvedShopId) {
+    return res.status(200).json([]);
+  }
+
   const query = `
     SELECT 
       o.*, 
@@ -370,17 +549,19 @@ const getOrderItemsJoined = async (req, res) => {
     FROM 
       order_items o
     JOIN 
-      items i ON TRIM(LOWER(o.item_name)) = TRIM(LOWER(i.iname))
+      items i ON TRIM(LOWER(o.item_name)) = TRIM(LOWER(i.iname)) AND i.shop_id = o.shop_id
     LEFT JOIN 
-      categories c ON i.catid = c.id
+      categories c ON i.catid = c.id AND c.shop_id = o.shop_id
     LEFT JOIN 
-      subcategory s ON i.subcatid = s.id
+      subcategory s ON i.subcatid = s.id AND s.cat_id = i.catid
+    WHERE
+      o.shop_id = ?
     ORDER BY 
       o.id DESC
   `;
 
   try {
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [resolvedShopId]);
     res.json(results);
   } catch (err) {
     console.error("JOIN query error:", err);
@@ -501,8 +682,16 @@ const getNextItemCode = async (req, res) => {
     const authToken = req.headers.authorization.split(' ')[1];
     jwt.verify(authToken, jwt_secret);
     
-    const query = `SELECT MAX(item_code) as max_item_code FROM items`;
-    const [result] = await db.query(query);
+    const shopId = resolveShopId(req);
+    if (!shopId) {
+      return res.status(400).send({
+        success: false,
+        message: 'Unable to resolve shop_id for item code generation',
+      });
+    }
+    
+    const query = `SELECT MAX(item_code) as max_item_code FROM items WHERE shop_id = ?`;
+    const [result] = await db.query(query, [shopId]);
     
     let nextItemCode = 1;
     if (result && result.length > 0 && result[0].max_item_code !== null) {

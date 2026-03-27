@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const { db, format } = require("../config/dbconnection");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const paymentController = require('./paymentController');
 const jwt_secret = process.env.JWT_SECRET || "setupnewkey";
 
 // REGISTER
@@ -10,7 +11,7 @@ const register = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { name, contact, email, type, lastloggedin, pass } = req.body;
+  const { name, contact, email, type, lastloggedin, pass, shop_id } = req.body;
   const userid = Math.floor(Math.random() * (99999 - 1000) + 1000);
 
   try {
@@ -27,11 +28,13 @@ const register = async (req, res) => {
     // Hash password
     const hashedPass = await bcrypt.hash(pass, 10);
 
+    const resolvedShopId = Number(shop_id || req.shop_id || req.user?.shop_id || 0) || null;
+
     // Insert user
     const [insertResult] = await db.execute(
-      `INSERT INTO users (name, uname, contact, pass, type, email, last_loggedin)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, userid, contact, hashedPass, type, email, lastloggedin]
+      `INSERT INTO users (shop_id, name, uname, contact, pass, type, email, last_loggedin)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [resolvedShopId, name, userid, contact, hashedPass, type, email, lastloggedin]
     );
 
     res.status(201).json({ msg: "User registered successfully", userId: insertResult.insertId });
@@ -126,6 +129,21 @@ const login = async (req, res) => {
         console.log(`✅ Admin user ${user.uname} - Device verification bypassed`);
       } else if (user.user_uuid && !mac_address) {
         console.warn(`⚠️ Login attempt without device MAC for user ${user.uname}`);
+      }
+
+      // Payment/subscription guard for shop users.
+      if (user.shop_id) {
+        const paymentStatus = await paymentController.checkShopPaymentStatus(user.shop_id);
+        if (!paymentStatus.isActive) {
+          return res.status(403).json({
+            error: paymentStatus.message,
+            code: 'PAYMENT_BLOCKED',
+            requiresPayment: true,
+            status: paymentStatus.status,
+            dueDate: paymentStatus.dueDate || null,
+            shop_id: user.shop_id
+          });
+        }
       }
 
       const token = jwt.sign({ id: user.id, type: user.type, shop_id: user.shop_id }, jwt_secret, { expiresIn: "60m" });

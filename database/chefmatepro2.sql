@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `chefmatepro2`
+-- Database: `chefmatepro`
 --
 
 DELIMITER $$
@@ -26,25 +26,9 @@ DELIMITER $$
 -- Procedures
 --
 DROP PROCEDURE IF EXISTS `CheckFeatureAccess`$$
-CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `CheckFeatureAccess` (IN `p_user_id` INT, IN `p_feature_code` VARCHAR(50), OUT `p_has_access` BOOLEAN, OUT `p_usage_limit` INT, OUT `p_current_usage` INT)   BEGIN
-    SELECT 
-        is_enabled,
-        usage_limit,
-        current_usage
-    INTO p_has_access, p_usage_limit, p_current_usage
-    FROM v_user_features
-    WHERE user_id = p_user_id 
-    AND feature_code = p_feature_code;
-    
-    IF p_has_access IS NULL THEN
-        SET p_has_access = FALSE;
-        SET p_usage_limit = 0;
-        SET p_current_usage = 0;
-    END IF;
-END$$
 
 DROP PROCEDURE IF EXISTS `GetActiveCompanyInfo`$$
-CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `GetActiveCompanyInfo` ()   BEGIN
+CREATE DEFINER=`chefmatepro`@`localhost` PROCEDURE `GetActiveCompanyInfo` ()   BEGIN
   SELECT * FROM `company_profile` 
   WHERE `is_active` = 1 
   ORDER BY `created_at` DESC 
@@ -52,7 +36,7 @@ CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `GetActiveCompanyInfo` ()   
 END$$
 
 DROP PROCEDURE IF EXISTS `GetUserFeatures`$$
-CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `GetUserFeatures` (IN `p_user_id` INT)   BEGIN
+CREATE DEFINER=`chefmatepro`@`localhost` PROCEDURE `GetUserFeatures` (IN `p_user_id` INT)   BEGIN
     SELECT 
         feature_code,
         feature_name,
@@ -68,7 +52,7 @@ CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `GetUserFeatures` (IN `p_use
 END$$
 
 DROP PROCEDURE IF EXISTS `UpdateCompanyInfo`$$
-CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `UpdateCompanyInfo` (IN `p_id` INT, IN `p_name` VARCHAR(255), IN `p_tax_id` VARCHAR(100), IN `p_phone` VARCHAR(50), IN `p_email` VARCHAR(255), IN `p_address` TEXT, IN `p_website` VARCHAR(255), IN `p_city` VARCHAR(100), IN `p_state` VARCHAR(100), IN `p_zip` VARCHAR(20), IN `p_country` VARCHAR(100), IN `p_updated_by` INT)   BEGIN
+CREATE DEFINER=`chefmatepro`@`localhost` PROCEDURE `UpdateCompanyInfo` (IN `p_id` INT, IN `p_name` VARCHAR(255), IN `p_tax_id` VARCHAR(100), IN `p_phone` VARCHAR(50), IN `p_email` VARCHAR(255), IN `p_address` TEXT, IN `p_website` VARCHAR(255), IN `p_city` VARCHAR(100), IN `p_state` VARCHAR(100), IN `p_zip` VARCHAR(20), IN `p_country` VARCHAR(100), IN `p_updated_by` INT)   BEGIN
   UPDATE `company_profile` 
   SET 
     `name` = p_name,
@@ -87,7 +71,7 @@ CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `UpdateCompanyInfo` (IN `p_i
 END$$
 
 DROP PROCEDURE IF EXISTS `UpdateFeatureUsage`$$
-CREATE DEFINER=`chefmatepro2`@`localhost` PROCEDURE `UpdateFeatureUsage` (IN `p_user_id` INT, IN `p_feature_code` VARCHAR(50), IN `p_increment` INT)   BEGIN
+CREATE DEFINER=`chefmatepro`@`localhost` PROCEDURE `UpdateFeatureUsage` (IN `p_user_id` INT, IN `p_feature_code` VARCHAR(50), IN `p_increment` INT)   BEGIN
     INSERT INTO feature_usage (user_id, feature_code, current_usage)
     VALUES (p_user_id, p_feature_code, p_increment)
     ON DUPLICATE KEY UPDATE 
@@ -512,6 +496,7 @@ DELIMITER ;
 --
 DROP VIEW IF EXISTS `company_profile_basic`;
 CREATE TABLE IF NOT EXISTS `company_profile_basic` (
+  `id` int
 );
 
 -- --------------------------------------------------------
@@ -522,6 +507,7 @@ CREATE TABLE IF NOT EXISTS `company_profile_basic` (
 --
 DROP VIEW IF EXISTS `company_profile_display`;
 CREATE TABLE IF NOT EXISTS `company_profile_display` (
+  `id` int
 );
 
 -- --------------------------------------------------------
@@ -764,6 +750,7 @@ CREATE TABLE IF NOT EXISTS `final_bill` (
   `id` int NOT NULL AUTO_INCREMENT,
   `shop_id` int DEFAULT '1',
   `customer_id` int DEFAULT NULL,
+  `inv_number` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `inv_date` date NOT NULL,
   `inv_time` time(6) NOT NULL,
   `table_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
@@ -782,7 +769,8 @@ CREATE TABLE IF NOT EXISTS `final_bill` (
   `remark` varchar(233) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`),
   KEY `customer_id` (`customer_id`),
-  KEY `idx_shop_id` (`shop_id`)
+  KEY `idx_shop_id` (`shop_id`),
+  KEY `idx_final_bill_inv_number` (`shop_id`,`inv_number`)
 ) ENGINE=InnoDB AUTO_INCREMENT=386 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -7374,6 +7362,7 @@ CREATE TABLE IF NOT EXISTS `shops` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Shop/Restaurant name',
   `shop_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Unique shop identifier',
+  `bill_prefix` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Unique prefix for shop bill numbering',
   `tax_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Tax identification number',
   `phone_number` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Primary phone',
   `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Shop email',
@@ -7404,6 +7393,7 @@ CREATE TABLE IF NOT EXISTS `shops` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `shop_code` (`shop_code`),
   UNIQUE KEY `unique_shop_code` (`shop_code`),
+  UNIQUE KEY `uk_shops_bill_prefix` (`bill_prefix`),
   UNIQUE KEY `unique_tax_id` (`tax_id`),
   KEY `idx_shop_name` (`name`),
   KEY `idx_subscription_status` (`subscription_status`),
@@ -7417,9 +7407,9 @@ CREATE TABLE IF NOT EXISTS `shops` (
 -- Dumping data for table `shops`
 --
 
-INSERT INTO `shops` (`id`, `name`, `shop_code`, `tax_id`, `phone_number`, `email`, `address`, `city`, `state`, `zip_code`, `country`, `website`, `logo`, `logo_type`, `logo_name`, `contact_person`, `contact_person_phone`, `subscription_status`, `subscription_plan_id`, `subscription_start_date`, `subscription_end_date`, `no_of_terminals`, `max_users`, `storage_quota_gb`, `database_prefix`, `is_active`, `created_at`, `updated_at`, `created_by`, `updated_by`) VALUES
-(1, 'Default Shop', 'DEFAULT001', '0205569006468', '+66-839194134', 'info@chefmate.com', '371/6-8 Moo 10, Muang Pattaya, Bang Lamung District, Chon Buri 20150', 'Bangkok', 'Bangkok', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'active', 2, '2026-03-26 16:03:14', '2027-03-26 16:03:14', 1, 10, 50, NULL, 1, '2026-03-26 09:03:14', '2026-03-26 09:03:14', NULL, NULL),
-(2, 'The View 2025 co. Ltd', 'shop001', '5265+6', '2656515616556', 'view@gmail.com', 'สำนักงานใหญ่ บริษัท เดอะวิว 2025 225/78 Thotworachai Company Limited Alley, Bang Lamung District, Chon Buri 20150\nAmphoe Bang Lamung,', 'Pattaya', 'chonburi', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'trial', 1, '2026-03-26 18:02:28', '2027-03-26 18:02:28', 1, 10, 50, NULL, 1, '2026-03-26 11:02:28', '2026-03-26 11:02:28', 1, NULL);
+INSERT INTO `shops` (`id`, `name`, `shop_code`, `bill_prefix`, `tax_id`, `phone_number`, `email`, `address`, `city`, `state`, `zip_code`, `country`, `website`, `logo`, `logo_type`, `logo_name`, `contact_person`, `contact_person_phone`, `subscription_status`, `subscription_plan_id`, `subscription_start_date`, `subscription_end_date`, `no_of_terminals`, `max_users`, `storage_quota_gb`, `database_prefix`, `is_active`, `created_at`, `updated_at`, `created_by`, `updated_by`) VALUES
+(1, 'Default Shop', 'DEFAULT001', 'DEF', '0205569006468', '+66-839194134', 'info@chefmate.com', '371/6-8 Moo 10, Muang Pattaya, Bang Lamung District, Chon Buri 20150', 'Bangkok', 'Bangkok', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'active', 2, '2026-03-26 16:03:14', '2027-03-26 16:03:14', 1, 10, 50, NULL, 1, '2026-03-26 09:03:14', '2026-03-26 09:03:14', NULL, NULL),
+(2, 'The View 2025 co. Ltd', 'shop001', 'TVW', '5265+6', '2656515616556', 'view@gmail.com', 'สำนักงานใหญ่ บริษัท เดอะวิว 2025 225/78 Thotworachai Company Limited Alley, Bang Lamung District, Chon Buri 20150\nAmphoe Bang Lamung,', 'Pattaya', 'chonburi', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'trial', 1, '2026-03-26 18:02:28', '2027-03-26 18:02:28', 1, 10, 50, NULL, 1, '2026-03-26 11:02:28', '2026-03-26 11:02:28', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -8153,7 +8143,7 @@ CREATE TABLE IF NOT EXISTS `vending_transactions` (
 DROP TABLE IF EXISTS `company_profile_basic`;
 
 DROP VIEW IF EXISTS `company_profile_basic`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`chefmatepro2`@`localhost` SQL SECURITY DEFINER VIEW `company_profile_basic`  AS SELECT `company_profile`.`id` AS `id`, `company_profile`.`name` AS `name`, `company_profile`.`tax_id` AS `tax_id`, `company_profile`.`phone_number` AS `phone_number`, `company_profile`.`email` AS `email`, `company_profile`.`address` AS `address`, `company_profile`.`website` AS `website`, `company_profile`.`city` AS `city`, `company_profile`.`state` AS `state`, `company_profile`.`zip_code` AS `zip_code`, `company_profile`.`country` AS `country`, `company_profile`.`bank_name` AS `bank_name`, `company_profile`.`account_number` AS `account_number`, `company_profile`.`account_name` AS `account_name`, `company_profile`.`payment_methods` AS `payment_methods`, `company_profile`.`is_active` AS `is_active`, `company_profile`.`created_at` AS `created_at`, `company_profile`.`updated_at` AS `updated_at` FROM `company_profile` WHERE (`company_profile`.`is_active` = 1) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`chefmatepro`@`localhost` SQL SECURITY DEFINER VIEW `company_profile_basic`  AS SELECT `company_profile`.`id` AS `id`, `company_profile`.`name` AS `name`, `company_profile`.`tax_id` AS `tax_id`, `company_profile`.`phone_number` AS `phone_number`, `company_profile`.`email` AS `email`, `company_profile`.`address` AS `address`, `company_profile`.`website` AS `website`, `company_profile`.`city` AS `city`, `company_profile`.`state` AS `state`, `company_profile`.`zip_code` AS `zip_code`, `company_profile`.`country` AS `country`, `company_profile`.`bank_name` AS `bank_name`, `company_profile`.`account_number` AS `account_number`, `company_profile`.`account_name` AS `account_name`, `company_profile`.`payment_methods` AS `payment_methods`, `company_profile`.`is_active` AS `is_active`, `company_profile`.`created_at` AS `created_at`, `company_profile`.`updated_at` AS `updated_at` FROM `company_profile` WHERE (`company_profile`.`is_active` = 1) ;
 
 -- --------------------------------------------------------
 
@@ -8163,7 +8153,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`chefmatepro2`@`localhost` SQL SECURITY DEFIN
 DROP TABLE IF EXISTS `company_profile_display`;
 
 DROP VIEW IF EXISTS `company_profile_display`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`chefmatepro2`@`localhost` SQL SECURITY DEFINER VIEW `company_profile_display`  AS SELECT `company_profile`.`id` AS `id`, `company_profile`.`name` AS `name`, `company_profile`.`tax_id` AS `tax_id`, `company_profile`.`phone_number` AS `phone_number`, `company_profile`.`email` AS `email`, `company_profile`.`address` AS `address`, `company_profile`.`city` AS `city`, `company_profile`.`state` AS `state`, `company_profile`.`zip_code` AS `zip_code`, `company_profile`.`country` AS `country`, (case when (`company_profile`.`logo` is not null) then 1 else 0 end) AS `has_logo`, (case when (`company_profile`.`qr_code` is not null) then 1 else 0 end) AS `has_qr_code`, `company_profile`.`terms_and_conditions` AS `terms_and_conditions`, `company_profile`.`payment_methods` AS `payment_methods` FROM `company_profile` WHERE (`company_profile`.`is_active` = 1) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`chefmatepro`@`localhost` SQL SECURITY DEFINER VIEW `company_profile_display`  AS SELECT `company_profile`.`id` AS `id`, `company_profile`.`name` AS `name`, `company_profile`.`tax_id` AS `tax_id`, `company_profile`.`phone_number` AS `phone_number`, `company_profile`.`email` AS `email`, `company_profile`.`address` AS `address`, `company_profile`.`city` AS `city`, `company_profile`.`state` AS `state`, `company_profile`.`zip_code` AS `zip_code`, `company_profile`.`country` AS `country`, (case when (`company_profile`.`logo` is not null) then 1 else 0 end) AS `has_logo`, (case when (`company_profile`.`qr_code` is not null) then 1 else 0 end) AS `has_qr_code`, `company_profile`.`terms_and_conditions` AS `terms_and_conditions`, `company_profile`.`payment_methods` AS `payment_methods` FROM `company_profile` WHERE (`company_profile`.`is_active` = 1) ;
 
 --
 -- Constraints for dumped tables

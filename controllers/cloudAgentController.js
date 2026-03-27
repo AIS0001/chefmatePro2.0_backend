@@ -117,28 +117,59 @@ const fetchCompanyInfo = async () => {
 };
 
 const fetchBillItems = async (billId) => {
+  const [[billRow]] = await db.query(
+    `SELECT id, inv_number
+     FROM final_bill
+     WHERE id = ?
+     LIMIT 1`,
+    [billId]
+  );
+
+  const invoiceCandidates = [billRow?.inv_number, String(billId)].filter(
+    (value, index, source) => value && source.indexOf(value) === index
+  );
+
+  const [orderIdRows] = await db.query(
+    `SELECT item_name, quantity, total_price
+     FROM order_items
+     WHERE order_id = ?`,
+    [billId]
+  );
+
+  if (orderIdRows && orderIdRows.length > 0) {
+    return orderIdRows;
+  }
+
   try {
-    const [rows] = await db.query(
+    const [legacyRows] = await db.query(
       `SELECT item_name, quantity, total_price
        FROM order_items
        WHERE bill_id = ?`,
       [billId]
     );
-    return rows;
+
+    if (legacyRows && legacyRows.length > 0) {
+      return legacyRows;
+    }
   } catch (error) {
     if (!String(error.message || "").toLowerCase().includes("unknown column")) {
       throw error;
     }
   }
 
-  const [fallbackRows] = await db.query(
+  if (invoiceCandidates.length === 0) {
+    return [];
+  }
+
+  const placeholders = invoiceCandidates.map(() => '?').join(', ');
+  const [invoiceRows] = await db.query(
     `SELECT item_name, quantity, total_price
      FROM order_items
-     WHERE invoice_number = ?`,
-    [String(billId)]
+     WHERE invoice_number IN (${placeholders})`,
+    invoiceCandidates
   );
 
-  return fallbackRows;
+  return invoiceRows;
 };
 
 const normalizeGroup = (value) => {
@@ -427,7 +458,7 @@ const sendInvoiceByBillId = async (req, res) => {
 
   try {
     const [[billRow]] = await db.query(
-      `SELECT id, inv_date, inv_time, table_number, subtotal, subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode
+      `SELECT id, inv_number, inv_date, inv_time, table_number, subtotal, subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode
        FROM final_bill
        WHERE id = ?
        LIMIT 1`,
@@ -515,6 +546,7 @@ const sendInvoiceByBillId = async (req, res) => {
       mode: "single",
       printType: "invoice",
       bill_id: billRow.id,
+      invoiceNo: billRow.inv_number || String(billRow.id),
       table: billRow.table_number,
       date: billRow.inv_date,
       time: billRow.inv_time,
@@ -688,18 +720,22 @@ const printKotWithDetection = async (req, res) => {
           console.log(`   ${idx + 1}. ${p.terminal_id} (${p.location}): ${p.printer_ip}:${p.printer_port}`);
         });
 
-        // ✅ If multiple printers, send to ALL; if single, send to that one
-        if (devicePrinters.length === 1) {
-          // Single printer: Send directly
-          const printer = devicePrinters[0];
+        // Send to all printers registered for this UUID
+        const targetedPrinters = devicePrinters;
+
+        // ✅ Send each printer as an individual sequential job (single-printer path proven reliable)
+        const resolvedCompanyName = companyName || await fetchCompanyName();
+        const printResults = [];
+
+        for (const printer of targetedPrinters) {
           const payload = {
-            jobId: jobId,
+            jobId: `${jobId}-${printer.terminal_id}`,
             table,
             items,
             heading: heading || 'KOT',
             total,
-            target: printer.location,
-            companyName: companyName || await fetchCompanyName(),
+            target: printer.location,          // 'kitchen' or 'cashier' — uses proven single-printer routing
+            companyName: resolvedCompanyName,
             printerIp: printer.printer_ip,
             printerPort: printer.printer_port,
             terminalId: printer.terminal_id,
@@ -707,66 +743,28 @@ const printKotWithDetection = async (req, res) => {
             ...otherData
           };
 
-          console.log(`📤 Sending KOT to single printer: ${printer.terminal_id} (${printer.location})`);
-          const result = await sendPrintJobPayload(payload);
-
-          return res.json({
-            success: true,
-            message: 'KOT sent to printer',
-            data: {
-              jobId,
-              printer: printer.terminal_id,
-              location: printer.location,
-              printerIp: printer.printer_ip,
-              itemsCount: items.length,
-              result
-            }
-          });
-        } else {
-          // ✅ Multiple printers: Send to ALL locations via multi-printer mode
-          console.log(`\n📤 Sending to ${devicePrinters.length} printers (multi-location mode)...`);
-
-          const allPrinterIps = devicePrinters.map(p => ({
-            ip: p.printer_ip,
-            port: p.printer_port,
-            location: p.location,
-            terminal_id: p.terminal_id,
-            mac_address: p.mac_address
-          }));
-
-          const multiPayload = {
-            jobId: jobId,
-            table,
-            items,
-            heading: heading || 'KOT',
-            total,
-            target: 'multi-location',
-            companyName: companyName || await fetchCompanyName(),
-            printers: allPrinterIps,
-            allPrinterIps: allPrinterIps,
-            machineUuid: machine_uuid,
-            ...otherData
-          };
-
-          console.log(`📤 Sending KOT to multiple locations`);
-          const result = await sendPrintJobPayload(multiPayload);
-
-          return res.json({
-            success: true,
-            message: 'KOT sent to all assigned printers',
-            data: {
-              jobId,
-              printersCount: devicePrinters.length,
-              printers: allPrinterIps.map(p => ({
-                terminal_id: p.terminal_id,
-                location: p.location,
-                printer_ip: p.ip
-              })),
-              itemsCount: items.length,
-              result
-            }
-          });
+          console.log(`📤 Sending KOT to: ${printer.terminal_id} (${printer.location}) @ ${printer.printer_ip}:${printer.printer_port}`);
+          try {
+            const result = await sendPrintJobPayload(payload);
+            printResults.push({ terminal_id: printer.terminal_id, location: printer.location, printer_ip: printer.printer_ip, success: true, result });
+            console.log(`✅ Sent to ${printer.terminal_id}`);
+          } catch (printErr) {
+            printResults.push({ terminal_id: printer.terminal_id, location: printer.location, printer_ip: printer.printer_ip, success: false, error: printErr.message });
+            console.error(`❌ Failed to send to ${printer.terminal_id}:`, printErr.message);
+          }
         }
+
+        const anySuccess = printResults.some(r => r.success);
+        return res.json({
+          success: anySuccess,
+          message: anySuccess ? `KOT sent to ${printResults.filter(r => r.success).length}/${targetedPrinters.length} printer(s)` : 'Failed to send KOT to all printers',
+          data: {
+            jobId,
+            printersCount: targetedPrinters.length,
+            results: printResults,
+            itemsCount: items.length
+          }
+        });
       } catch (uuidError) {
         console.error('Error looking up UUID printer:', uuidError);
         return res.status(500).json({

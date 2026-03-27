@@ -1,16 +1,21 @@
 const { validationResult } = require('express-validator');
 const db = require('../config/dbconnection1');
+const { requireShopId } = require('../helpers/shopScope');
 
 // GET ANALYTICS DASHBOARD DATA
 const getAnalyticsDashboard = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const formatDate = (dateValue) => {
       const date = new Date(dateValue);
       return date.toISOString().split('T')[0];
     };
 
     const [latestCloseRows] = await db.query(
-      `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`
+      `SELECT close_date FROM day_close_summary WHERE shop_id = ? ORDER BY close_date DESC LIMIT 1`,
+      [shopId]
     );
 
     let today;
@@ -29,24 +34,41 @@ const getAnalyticsDashboard = async (req, res) => {
     }
     
     // Today's and Yesterday's Sales
-    const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [today]);
-    const [yesterdaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [yesterday]);
-    const [todayDiscount] = await db.query(`SELECT COALESCE(SUM(discount_amount), 0) AS val FROM final_bill WHERE DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [today]);
+    const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
+    const [yesterdaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, yesterday]);
+    const [todayDiscount] = await db.query(`SELECT COALESCE(SUM(discount_amount), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
     
     // Monthly and Today's Purchases  
-    const [monthlyPurchases] = await db.query(`SELECT COALESCE(SUM(netAmount), 0) AS val FROM inventory WHERE YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())`);
-    const [todayPurchases] = await db.query(`SELECT COALESCE(SUM(netAmount), 0) AS val FROM inventory WHERE DATE(created_at) = ?`, [today]);
+    const [monthlyPurchases] = await db.query(`
+      SELECT COALESCE(SUM(inv.netAmount), 0) AS val
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ? AND YEAR(inv.created_at) = YEAR(CURDATE()) AND MONTH(inv.created_at) = MONTH(CURDATE())
+    `, [shopId]);
+    const [todayPurchases] = await db.query(`
+      SELECT COALESCE(SUM(inv.netAmount), 0) AS val
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ? AND DATE(inv.created_at) = ?
+    `, [shopId, today]);
     
     // Total Orders this month
-    const [totalOrders] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())`);
+    const [totalOrders] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE shop_id = ? AND YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())`, [shopId]);
 
-    const [cancelledBills] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE status = 2`);
-    const [entertainmentTotal] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE LOWER(payment_mode) = 'entertainment'`);
+    const [cancelledBills] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE shop_id = ? AND status = 2`, [shopId]);
+    const [entertainmentTotal] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND LOWER(payment_mode) = 'entertainment'`, [shopId]);
     
     // Active Suppliers count - if supplier_id is not available, use a fallback
     let totalSuppliers;
     try {
-      const [suppliersCount] = await db.query(`SELECT COUNT(DISTINCT supplier_id) AS val FROM inventory WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND supplier_id IS NOT NULL`);
+      const [suppliersCount] = await db.query(`
+        SELECT COUNT(DISTINCT inv.supplier_id) AS val
+        FROM inventory inv
+        INNER JOIN items i ON i.id = inv.item_id
+        WHERE i.shop_id = ?
+          AND inv.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          AND inv.supplier_id IS NOT NULL
+      `, [shopId]);
       totalSuppliers = suppliersCount[0].val || 15; // Fallback to 15 if no suppliers found
     } catch (err) {
       totalSuppliers = 15; // Default fallback value
@@ -75,6 +97,9 @@ const getAnalyticsDashboard = async (req, res) => {
 // GET MONTHLY SALES VS PURCHASES DATA
 const getMonthlySalesVsPurchases = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         MONTHNAME(DATE_FORMAT(CURDATE() - INTERVAL n MONTH, '%Y-%m-01')) as month,
@@ -89,22 +114,23 @@ const getMonthlySalesVsPurchases = async (req, res) => {
           DATE_FORMAT(inv_date, '%Y-%m-01') as month_date,
           SUM(grand_total) as total_sales
         FROM final_bill
-        WHERE inv_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        WHERE shop_id = ? AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
         GROUP BY YEAR(inv_date), MONTH(inv_date)
       ) as sales ON DATE_FORMAT(CURDATE() - INTERVAL months.n MONTH, '%Y-%m-01') = sales.month_date
       LEFT JOIN (
         SELECT 
-          DATE_FORMAT(created_at, '%Y-%m-01') as month_date,
-          SUM(netAmount) as total_purchases
-        FROM inventory
-        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-        GROUP BY YEAR(created_at), MONTH(created_at)
+          DATE_FORMAT(inv.created_at, '%Y-%m-01') as month_date,
+          SUM(inv.netAmount) as total_purchases
+        FROM inventory inv
+        INNER JOIN items i ON i.id = inv.item_id
+        WHERE i.shop_id = ? AND inv.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY YEAR(inv.created_at), MONTH(inv.created_at)
       ) as purchases ON DATE_FORMAT(CURDATE() - INTERVAL months.n MONTH, '%Y-%m-01') = purchases.month_date
       ORDER BY months.n DESC
       LIMIT 12
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId, shopId]);
     res.json({ success: true, data: results });
   } catch (err) {
     console.error("Error fetching monthly sales vs purchases:", err);
@@ -115,6 +141,9 @@ const getMonthlySalesVsPurchases = async (req, res) => {
 // GET SUPPLIERS OUTSTANDING PAYMENT DATA
 const getSuppliersOutstanding = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     // First, let's check if suppliers table exists by trying a simple query
     const checkSuppliersQuery = `
       SELECT 
@@ -123,7 +152,9 @@ const getSuppliersOutstanding = async (req, res) => {
         COALESCE(SUM(i.netAmount), 0) as total_amount,
         4.5 as avg_rating
       FROM inventory i
-      WHERE i.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      INNER JOIN items it ON it.id = i.item_id
+      WHERE it.shop_id = ?
+        AND i.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         AND i.supplier_id IS NOT NULL
       GROUP BY i.supplier_id
       HAVING total_orders > 0
@@ -131,7 +162,7 @@ const getSuppliersOutstanding = async (req, res) => {
       LIMIT 8
     `;
     
-    const [results] = await db.query(checkSuppliersQuery);
+    const [results] = await db.query(checkSuppliersQuery, [shopId]);
     
     // If no data found, return sample data
     if (results.length === 0) {
@@ -165,6 +196,9 @@ const getSuppliersOutstanding = async (req, res) => {
 // GET ORDER STATUS DISTRIBUTION
 const getOrderStatusDistribution = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         CASE 
@@ -177,9 +211,9 @@ const getOrderStatusDistribution = async (req, res) => {
           ELSE 'Processing'
         END as status_name,
         COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM final_bill WHERE inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))), 1) as percentage
+        ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM final_bill WHERE shop_id = ? AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)), 0)), 1) as percentage
       FROM final_bill 
-      WHERE inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      WHERE shop_id = ? AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
       GROUP BY 
         CASE 
           WHEN status = '1' OR status = 'Paid' THEN 'Completed'
@@ -193,7 +227,7 @@ const getOrderStatusDistribution = async (req, res) => {
       ORDER BY count DESC
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId, shopId]);
     
     // Define colors for each status
     const statusColors = {
@@ -222,24 +256,29 @@ const getOrderStatusDistribution = async (req, res) => {
 // GET TOP SELLING PRODUCTS
 const getTopSellingProducts = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         oi.item_name as name,
         SUM(oi.quantity) as sales,
         SUM(oi.total_price) as revenue
       FROM order_items oi
-      WHERE EXISTS (
-        SELECT 1 FROM final_bill fb 
-        WHERE CAST(oi.invoice_number AS UNSIGNED) = fb.id 
-        AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        AND fb.status != 2
-      )
+      WHERE oi.shop_id = ?
+        AND EXISTS (
+          SELECT 1 FROM final_bill fb 
+          WHERE oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))
+          AND fb.shop_id = ?
+          AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          AND fb.status != 2
+        )
       GROUP BY oi.item_name
       ORDER BY sales DESC
       LIMIT 4
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId, shopId]);
     
     // Add colors to results
     const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
@@ -276,6 +315,9 @@ const getTopSellingProducts = async (req, res) => {
 // GET CATEGORY DISTRIBUTION
 const getCategoryDistribution = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         CASE 
@@ -288,7 +330,9 @@ const getCategoryDistribution = async (req, res) => {
           SELECT COUNT(*) FROM order_items oi2 
           WHERE EXISTS (
             SELECT 1 FROM final_bill fb2 
-            WHERE CAST(oi2.invoice_number AS UNSIGNED) = fb2.id 
+            WHERE oi2.invoice_number = COALESCE(NULLIF(fb2.inv_number, ''), CAST(fb2.id AS CHAR))
+            AND oi2.shop_id = ?
+            AND fb2.shop_id = ?
             AND fb2.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
             AND fb2.status != 2
           )
@@ -296,7 +340,9 @@ const getCategoryDistribution = async (req, res) => {
       FROM order_items oi
       WHERE EXISTS (
         SELECT 1 FROM final_bill fb 
-        WHERE CAST(oi.invoice_number AS UNSIGNED) = fb.id 
+        WHERE oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))
+        AND oi.shop_id = ?
+        AND fb.shop_id = ?
         AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         AND fb.status != 2
       )
@@ -304,7 +350,7 @@ const getCategoryDistribution = async (req, res) => {
       ORDER BY count DESC
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId, shopId, shopId, shopId]);
     
     // Define colors for categories
     const categoryColors = {
@@ -346,18 +392,23 @@ const getCategoryDistribution = async (req, res) => {
 // GET TOTAL SALES & EXPENSES
 const getTotalSalesExpenses = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const [salesResult] = await db.query(`
       SELECT COALESCE(SUM(net_sales), 0) as total_sales 
       FROM day_close_summary 
-      WHERE YEAR(close_date) = YEAR(CURDATE()) 
+      WHERE shop_id = ?
+        AND YEAR(close_date) = YEAR(CURDATE()) 
         AND MONTH(close_date) = MONTH(CURDATE())
-    `);
+    `, [shopId]);
     
     const [expensesResult] = await db.query(`
-      SELECT COALESCE(SUM(netAmount), 0) as total_expenses 
-      FROM inventory 
-      WHERE YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())
-    `);
+      SELECT COALESCE(SUM(inv.netAmount), 0) as total_expenses 
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ? AND YEAR(inv.created_at) = YEAR(CURDATE()) AND MONTH(inv.created_at) = MONTH(CURDATE())
+    `, [shopId]);
     
     const totalSales = salesResult[0].total_sales;
     const totalExpenses = expensesResult[0].total_expenses;
@@ -380,18 +431,21 @@ const getTotalSalesExpenses = async (req, res) => {
 // GET DAILY SALES TREND (Last 6 days)
 const getDailySalesTrend = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
         DATE_FORMAT(inv_date, '%a') as day,
         DATE(inv_date) as date,
         COALESCE(SUM(grand_total), 0) as sales
       FROM final_bill
-      WHERE inv_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+      WHERE shop_id = ? AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
       GROUP BY DATE(inv_date)
       ORDER BY inv_date
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId]);
     res.json({ success: true, data: results });
   } catch (err) {
     console.error("Error fetching daily sales trend:", err);
@@ -402,18 +456,22 @@ const getDailySalesTrend = async (req, res) => {
 // GET PURCHASE TRENDS (Last 6 days)
 const getPurchaseTrends = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const query = `
       SELECT 
-        DATE_FORMAT(created_at, '%a') as day,
-        DATE(created_at) as date,
-        COALESCE(SUM(netAmount), 0) as purchases
-      FROM inventory
-      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY created_at
+        DATE_FORMAT(inv.created_at, '%a') as day,
+        DATE(inv.created_at) as date,
+        COALESCE(SUM(inv.netAmount), 0) as purchases
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ? AND inv.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+      GROUP BY DATE(inv.created_at)
+      ORDER BY inv.created_at
     `;
     
-    const [results] = await db.query(query);
+    const [results] = await db.query(query, [shopId]);
     
     // If no data, return sample data for the chart
     if (results.length === 0) {
@@ -451,6 +509,8 @@ const getPurchaseTrends = async (req, res) => {
 // GET FOOD AND DRINKS/LIQUOR SALES
 const getFoodAndDrinksSale = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
 
     console.log("getFoodAndDrinksSale - Function called");
 
@@ -462,7 +522,8 @@ const getFoodAndDrinksSale = async (req, res) => {
     };
 
     const [latestCloseRows] = await db.query(
-      `SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1`
+      `SELECT close_date FROM day_close_summary WHERE shop_id = ? ORDER BY close_date DESC LIMIT 1`,
+      [shopId]
     );
 
     let today;
@@ -480,22 +541,22 @@ const getFoodAndDrinksSale = async (req, res) => {
     const [foodSales] = await db.query(`
       SELECT COALESCE(SUM(total_price), 0) as total_food_sale
       FROM order_items
-      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'food'
-    `, [today]);
+      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'food'
+    `, [shopId, today]);
 
     // Get Drinks/Liquor Sales
     const [drinksSales] = await db.query(`
       SELECT COALESCE(SUM(total_price), 0) as total_drinks_sale
       FROM order_items
-      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'bar'
-    `, [today]);
+      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'bar'
+    `, [shopId, today]);
 
     // Get Shisha Sales
     const [shishaSales] = await db.query(`
       SELECT COALESCE(SUM(total_price), 0) as total_shisha_sale
       FROM order_items
-      WHERE DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'shisha'
-    `, [today]);
+      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'shisha'
+    `, [shopId, today]);
 
     res.json({
       success: true,

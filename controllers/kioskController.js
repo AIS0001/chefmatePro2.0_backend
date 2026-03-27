@@ -1,9 +1,17 @@
 const { db } = require("../config/dbconnection");
 
+const resolveShopId = (req) => {
+  const raw = req.query?.shop_id || req.body?.shop_id || req.params?.shop_id || req.user?.shop_id || 1;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
 const getCategories = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
     const [rows] = await db.query(
-      "SELECT id, name FROM categories ORDER BY name ASC"
+      "SELECT id, name FROM categories WHERE shop_id = ? ORDER BY name ASC",
+      [shopId]
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -15,9 +23,10 @@ const getCategories = async (req, res) => {
 const getSubcategoriesByCategory = async (req, res) => {
   const { categoryId } = req.params;
   try {
+    const shopId = resolveShopId(req);
     const [rows] = await db.query(
-      "SELECT id, cat_id, subcat FROM subcategory WHERE cat_id = ? ORDER BY subcat ASC",
-      [categoryId]
+      "SELECT id, cat_id, subcat FROM subcategory WHERE shop_id = ? AND cat_id = ? ORDER BY subcat ASC",
+      [shopId, categoryId]
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -30,10 +39,14 @@ const getSubcategoriesByCategory = async (req, res) => {
 
 const getItems = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
     const { catid, subcatid, status } = req.query;
 
     const conditions = [];
     const values = [];
+
+    conditions.push("i.shop_id = ?");
+    values.push(shopId);
 
     if (catid) {
       conditions.push("i.catid = ?");
@@ -96,6 +109,7 @@ const getItems = async (req, res) => {
 const getItemById = async (req, res) => {
   const { id } = req.params;
   try {
+    const shopId = resolveShopId(req);
     const itemQuery = `
       SELECT
         i.id,
@@ -116,11 +130,11 @@ const getItemById = async (req, res) => {
       FROM items i
       LEFT JOIN categories c ON i.catid = c.id
       LEFT JOIN subcategory s ON i.subcatid = s.id
-      WHERE i.id = ?
+      WHERE i.id = ? AND i.shop_id = ?
       LIMIT 1;
     `;
 
-    const [itemRows] = await db.query(itemQuery, [id]);
+    const [itemRows] = await db.query(itemQuery, [id, shopId]);
     if (!itemRows.length) {
       return res
         .status(404)
@@ -128,8 +142,8 @@ const getItemById = async (req, res) => {
     }
 
     const [images] = await db.query(
-      `SELECT id, filename, path, mimetype, size, dateUploaded FROM item_images WHERE product_id = ? ORDER BY id ASC`,
-      [id]
+      `SELECT id, filename, path, mimetype, size, dateUploaded FROM item_images WHERE product_id = ? AND shop_id = ? ORDER BY id ASC`,
+      [id, shopId]
     );
 
     res.json({ success: true, data: { ...itemRows[0], images } });
@@ -139,13 +153,16 @@ const getItemById = async (req, res) => {
   }
 };
 
-const getMenu = async (_req, res) => {
+const getMenu = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
     const [categories] = await db.query(
-      "SELECT id, name FROM categories ORDER BY name ASC"
+      "SELECT id, name FROM categories WHERE shop_id = ? ORDER BY name ASC",
+      [shopId]
     );
     const [subcategories] = await db.query(
-      "SELECT id, cat_id, subcat FROM subcategory ORDER BY subcat ASC"
+      "SELECT id, cat_id, subcat FROM subcategory WHERE shop_id = ? ORDER BY subcat ASC",
+      [shopId]
     );
     const [items] = await db.query(`
       SELECT
@@ -172,8 +189,9 @@ const getMenu = async (_req, res) => {
         GROUP BY product_id
       ) fi ON fi.product_id = i.id
       LEFT JOIN item_images img ON img.id = fi.first_image_id
+      WHERE i.shop_id = ?
       ORDER BY i.catid, i.subcatid, i.iname;
-    `);
+    `, [shopId]);
 
     const categoryMap = categories.map((cat) => ({
       id: cat.id,
@@ -218,8 +236,9 @@ const getMenu = async (_req, res) => {
   }
 };
 
-const getCompanyInfo = async (_req, res) => {
+const getCompanyInfo = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
     const [rows] = await db.query(
       `SELECT 
         id,
@@ -244,9 +263,10 @@ const getCompanyInfo = async (_req, res) => {
         updated_at,
         is_active
       FROM company_profile
-      WHERE is_active = 1
+      WHERE is_active = 1 AND shop_id = ?
       ORDER BY updated_at DESC
-      LIMIT 1`
+      LIMIT 1`,
+      [shopId]
     );
 
     if (!rows.length) {

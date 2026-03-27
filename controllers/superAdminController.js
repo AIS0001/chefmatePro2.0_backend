@@ -6,6 +6,96 @@
 const { db } = require('../config/dbconnection');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const os = require('os');
+const { normalizeBillPrefix } = require('../helpers/shopBillPrefix');
+
+let lastProcessCpuSample = {
+  usage: process.cpuUsage(),
+  time: process.hrtime.bigint()
+};
+
+let lastSystemCpuSample = {
+  snapshot: os.cpus().map((cpu) => {
+    const total = Object.values(cpu.times).reduce((sum, value) => sum + value, 0);
+    return {
+      idle: cpu.times.idle,
+      total
+    };
+  })
+};
+
+function getProcessCpuUsagePercent() {
+  const currentUsage = process.cpuUsage();
+  const currentTime = process.hrtime.bigint();
+  const elapsedMicros = Number(currentTime - lastProcessCpuSample.time) / 1000;
+  const usageDelta = process.cpuUsage(lastProcessCpuSample.usage);
+
+  lastProcessCpuSample = {
+    usage: currentUsage,
+    time: currentTime
+  };
+
+  if (elapsedMicros <= 0) {
+    return 0;
+  }
+
+  const cpuMicros = usageDelta.user + usageDelta.system;
+  const cpuPercent = (cpuMicros / elapsedMicros) * 100;
+  return Number(Math.min(100, Math.max(0, cpuPercent)).toFixed(2));
+}
+
+function getSystemCpuUsagePercent() {
+  const currentSnapshot = os.cpus().map((cpu) => {
+    const total = Object.values(cpu.times).reduce((sum, value) => sum + value, 0);
+    return {
+      idle: cpu.times.idle,
+      total
+    };
+  });
+
+  const previousSnapshot = lastSystemCpuSample.snapshot;
+  lastSystemCpuSample = { snapshot: currentSnapshot };
+
+  if (!Array.isArray(previousSnapshot) || previousSnapshot.length !== currentSnapshot.length) {
+    return 0;
+  }
+
+  let idleDelta = 0;
+  let totalDelta = 0;
+
+  for (let index = 0; index < currentSnapshot.length; index += 1) {
+    idleDelta += currentSnapshot[index].idle - previousSnapshot[index].idle;
+    totalDelta += currentSnapshot[index].total - previousSnapshot[index].total;
+  }
+
+  if (totalDelta <= 0) {
+    return 0;
+  }
+
+  const usagePercent = (1 - (idleDelta / totalDelta)) * 100;
+  return Number(Math.min(100, Math.max(0, usagePercent)).toFixed(2));
+}
+
+function getPrimaryServerIp() {
+  const interfaces = os.networkInterfaces();
+
+  for (const addresses of Object.values(interfaces)) {
+    if (!Array.isArray(addresses)) {
+      continue;
+    }
+
+    const externalIpv4 = addresses.find((address) => address && address.family === 'IPv4' && !address.internal);
+    if (externalIpv4?.address) {
+      return externalIpv4.address;
+    }
+  }
+
+  return '127.0.0.1';
+}
+
+function getRuntimeEnvironmentName() {
+  return process.env.APP_ENV || process.env.NODE_ENV || 'development';
+}
 
 // =====================================================
 // AUTHENTICATION
@@ -303,6 +393,7 @@ exports.createShop = async (req, res) => {
     const {
       name,
       shop_code,
+      bill_prefix,
       tax_id,
       phone_number,
       email,
@@ -322,6 +413,12 @@ exports.createShop = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const normalizedBillPrefix = normalizeBillPrefix(bill_prefix, name);
+
+    if (!normalizedBillPrefix || normalizedBillPrefix.length < 2) {
+      return res.status(400).json({ error: 'Bill prefix must contain at least 2 letters or numbers' });
+    }
+
     // Resolve plan limits from subscription_plans instead of trusting client payload.
     const planId = Number(subscription_plan_id) || 1;
     const [planRows] = await connection.query(
@@ -335,16 +432,17 @@ exports.createShop = async (req, res) => {
 
     const query = `
       INSERT INTO shops 
-      (name, shop_code, tax_id, phone_number, email, address, city, state, 
+      (name, shop_code, bill_prefix, tax_id, phone_number, email, address, city, state, 
        zip_code, country, website, contact_person, contact_person_phone,
        subscription_plan_id,
        subscription_status, subscription_start_date, subscription_end_date, created_by, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 YEAR), ?, 1)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 YEAR), ?, 1)
     `;
 
     const params = [
       name,
       shop_code,
+      normalizedBillPrefix,
       tax_id,
       phone_number,
       email,
@@ -367,40 +465,21 @@ exports.createShop = async (req, res) => {
       result = insertResult;
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'Shop code or Tax ID already exists' });
+        return res.status(400).json({ error: 'Shop code, bill prefix, or Tax ID already exists' });
       }
       throw err;
     } finally {
       connection.release();
     }
 
-    // Create initial company profile for the shop
+    // Create initial company info record for the shop
     try {
-      const companyQuery = `
-        INSERT INTO company_profile 
-        (shop_id, name, tax_id, phone_number, email, address, city, state, zip_code, country, 
-         website, created_by, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `;
-
-      const companyParams = [
-        result.insertId,
-        name,
-        tax_id,
-        phone_number,
-        email,
-        address,
-        city || null,
-        state || null,
-        zip_code || null,
-        country || null,
-        website || null,
-        req.user.id,
-      ];
-
-      await db.query(companyQuery, companyParams);
+      await db.query(
+        `INSERT INTO companyinfo (shop_id, name, tax_id, phone_number, email, address) VALUES (?, ?, ?, ?, ?, ?)`,
+        [result.insertId, name, tax_id || '', phone_number, email, address]
+      );
     } catch (companyErr) {
-      console.error('Failed to create company profile:', companyErr);
+      console.error('Failed to create companyinfo record:', companyErr);
     }
 
     res.json({
@@ -425,7 +504,7 @@ exports.updateShop = async (req, res) => {
     const params = [];
 
     const allowedFields = [
-      'name', 'phone_number', 'email', 'address', 'city', 'state',
+      'name', 'bill_prefix', 'phone_number', 'email', 'address', 'city', 'state',
       'zip_code', 'country', 'website', 'contact_person', 'contact_person_phone',
       'subscription_status', 'no_of_terminals', 'max_users', 'storage_quota_gb',
     ];
@@ -433,6 +512,18 @@ exports.updateShop = async (req, res) => {
     const updateFields = [];
     for (const field of allowedFields) {
       if (field in updates) {
+        if (field === 'bill_prefix') {
+          const normalizedBillPrefix = normalizeBillPrefix(updates[field], updates.name || '');
+
+          if (!normalizedBillPrefix || normalizedBillPrefix.length < 2) {
+            return res.status(400).json({ error: 'Bill prefix must contain at least 2 letters or numbers' });
+          }
+
+          updateFields.push(`${field} = ?`);
+          params.push(normalizedBillPrefix);
+          continue;
+        }
+
         updateFields.push(`${field} = ?`);
         params.push(updates[field]);
       }
@@ -445,7 +536,33 @@ exports.updateShop = async (req, res) => {
     query += updateFields.join(', ') + ', updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
     params.push(req.user.id, shop_id);
 
-    await db.query(query, params);
+    try {
+      await db.query(query, params);
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(400).json({ error: 'Bill prefix must be unique for each shop' });
+      }
+      throw err;
+    }
+
+    // Sync companyinfo with any updated name/contact/address fields
+    const companyFields = ['name', 'tax_id', 'phone_number', 'email', 'address'];
+    const companyUpdates = [];
+    const companyParams = [];
+    for (const field of companyFields) {
+      if (field in updates) {
+        companyUpdates.push(`${field} = ?`);
+        companyParams.push(updates[field]);
+      }
+    }
+    if (companyUpdates.length > 0) {
+      companyParams.push(shop_id);
+      await db.query(
+        `UPDATE companyinfo SET ${companyUpdates.join(', ')} WHERE shop_id = ?`,
+        companyParams
+      ).catch(err => console.error('Failed to sync companyinfo on shop update:', err));
+    }
+
     res.json({ success: true, message: 'Shop updated successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -781,8 +898,52 @@ exports.getShopBilling = async (req, res) => {
     const { shop_id } = req.params;
     const { months = 12 } = req.query;
 
-    const query = `
-      SELECT 
+    const paymentRecordsQuery = `
+      SELECT
+        pr.id,
+        pr.shop_id,
+        DATE_SUB(pr.due_date, INTERVAL CASE pr.payment_type
+          WHEN 'YEARLY' THEN 12
+          WHEN 'QUARTERLY' THEN 3
+          ELSE 1
+        END MONTH) as billing_period_start,
+        pr.due_date as billing_period_end,
+        pr.amount as amount_due,
+        CASE WHEN pr.payment_status = 'COMPLETED' THEN pr.amount ELSE 0 END as amount_paid,
+        CASE
+          WHEN pr.payment_status = 'COMPLETED' THEN 'paid'
+          WHEN pr.payment_status IN ('CANCELLED', 'REFUNDED') THEN 'cancelled'
+          WHEN pr.payment_status = 'FAILED' THEN 'overdue'
+          WHEN pr.payment_status = 'PENDING' AND pr.due_date < CURDATE() THEN 'overdue'
+          ELSE 'pending'
+        END as billing_status,
+        pr.payment_type,
+        pr.payment_method,
+        pr.payment_status,
+        pr.reference_number,
+        pr.transaction_id,
+        pr.notes,
+        pr.created_at,
+        pr.updated_at,
+        sp.name as plan_name,
+        sp.price_per_month
+      FROM payment_records pr
+      LEFT JOIN shop_subscriptions ss ON pr.subscription_id = ss.id
+      LEFT JOIN subscription_plans sp ON ss.plan_id = sp.id
+      WHERE pr.shop_id = ?
+      ORDER BY pr.due_date DESC, pr.id DESC
+      LIMIT ?
+    `;
+
+    const [paymentRows] = await db.query(paymentRecordsQuery, [shop_id, parseInt(months)]);
+
+    // Backward compatibility: fallback for old deployments that still use shop_billing table.
+    if (paymentRows && paymentRows.length > 0) {
+      return res.json({ success: true, data: paymentRows });
+    }
+
+    const legacyQuery = `
+      SELECT
         sb.*,
         sp.name as plan_name,
         sp.price_per_month
@@ -793,8 +954,8 @@ exports.getShopBilling = async (req, res) => {
       LIMIT ?
     `;
 
-    const [results] = await db.query(query, [shop_id, parseInt(months)]);
-    res.json({ success: true, data: results });
+    const [legacyRows] = await db.query(legacyQuery, [shop_id, parseInt(months)]);
+    return res.json({ success: true, data: legacyRows });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });
   }
@@ -805,38 +966,112 @@ exports.getShopBilling = async (req, res) => {
  */
 exports.getDashboardStats = async (req, res) => {
   try {
-    const queries = {
-      totalShops: 'SELECT COUNT(*) as count FROM shops WHERE is_active = 1',
-      activeSubscriptions: 'SELECT COUNT(*) as count FROM shops WHERE subscription_status = "active"',
-      totalRevenue: 'SELECT SUM(amount_paid) as total FROM shop_billing WHERE billing_status = "paid"',
-      pendingPayments: `SELECT COUNT(*) as count FROM shop_billing WHERE billing_status IN ("pending", "overdue")`,
-      usersByShop: `
-        SELECT s.name, COUNT(u.id) as user_count
-        FROM shops s
-        LEFT JOIN users u ON s.id = u.shop_id
-        GROUP BY s.id
-        ORDER BY user_count DESC
-      `,
-      recentShops: `
-        SELECT id, name, shop_code, subscription_status, created_at
-        FROM shops
-        ORDER BY created_at DESC
-        LIMIT 5
-      `,
+    const { shop_id, start_date, end_date } = req.query;
+    const hasShopFilter = !!shop_id;
+    const hasDateRange = !!(start_date && end_date);
+
+    const shopFilter = hasShopFilter ? ' AND s.id = ?' : '';
+    const userFilter = hasShopFilter ? ' AND u.shop_id = ?' : '';
+    const paymentFilter = hasShopFilter ? ' AND pr.shop_id = ?' : '';
+    const paymentDateFilter = hasDateRange ? ' AND DATE(COALESCE(pr.paid_date, pr.created_at)) BETWEEN ? AND ?' : '';
+    const pendingDateFilter = hasDateRange ? ' AND DATE(pr.created_at) BETWEEN ? AND ?' : '';
+    const billDateFilter = hasDateRange ? ' AND DATE(fb.inv_date) BETWEEN ? AND ?' : '';
+
+    const withShopAndDate = () => {
+      const params = [];
+      if (hasShopFilter) params.push(shop_id);
+      if (hasDateRange) params.push(start_date, end_date);
+      return params;
     };
 
-    const stats = {};
+    const withShopOnly = () => (hasShopFilter ? [shop_id] : []);
 
-    for (const key of Object.keys(queries)) {
-      const [result] = await db.query(queries[key]);
-      if (key === 'usersByShop' || key === 'recentShops') {
-        stats[key] = result;
-      } else {
-        stats[key] = result[0];
-      }
+    const [totalShops] = await db.query(
+      `SELECT COUNT(*) as count FROM shops s WHERE COALESCE(s.is_active, 1) = 1${shopFilter}`,
+      withShopOnly()
+    );
+
+    const [activeShops] = await db.query(
+      `SELECT COUNT(*) as count FROM shops s WHERE COALESCE(s.is_active, 1) = 1 AND s.subscription_status = 'active'${shopFilter}`,
+      withShopOnly()
+    );
+
+    const [totalUsers] = await db.query(
+      `SELECT COUNT(*) as count FROM users u WHERE 1=1${userFilter}`,
+      withShopOnly()
+    );
+
+    const [totalRevenue] = await db.query(
+      `SELECT COALESCE(SUM(pr.amount), 0) as total
+       FROM payment_records pr
+       WHERE pr.payment_status = 'COMPLETED'${paymentFilter}${paymentDateFilter}`,
+      withShopAndDate()
+    );
+
+    const [pendingBills] = await db.query(
+      `SELECT COUNT(*) as count
+       FROM payment_records pr
+       WHERE pr.payment_status IN ('PENDING', 'FAILED')${paymentFilter}${pendingDateFilter}`,
+      withShopAndDate()
+    );
+
+    let lastMonthRevenue;
+    if (hasDateRange) {
+      [lastMonthRevenue] = await db.query(
+        `SELECT COALESCE(SUM(pr.amount), 0) as total
+         FROM payment_records pr
+         WHERE pr.payment_status = 'COMPLETED'${paymentFilter}${paymentDateFilter}`,
+        withShopAndDate()
+      );
+    } else {
+      [lastMonthRevenue] = await db.query(
+        `SELECT COALESCE(SUM(pr.amount), 0) as total
+         FROM payment_records pr
+         WHERE pr.payment_status = 'COMPLETED'
+           AND DATE(COALESCE(pr.paid_date, pr.created_at)) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)${paymentFilter}`,
+        withShopOnly()
+      );
     }
 
-    res.json({ success: true, data: stats });
+    const [subscriptionDistribution] = await db.query(
+      `SELECT COALESCE(sp.name, 'Unassigned') as name, COUNT(*) as count
+       FROM shops s
+       LEFT JOIN subscription_plans sp ON sp.id = s.subscription_plan_id
+       WHERE COALESCE(s.is_active, 1) = 1${shopFilter}
+       GROUP BY sp.id, sp.name
+       ORDER BY count DESC`,
+      withShopOnly()
+    );
+
+    const [topShops] = await db.query(
+      `SELECT
+         s.id,
+         s.name,
+         COUNT(fb.id) as total_bills,
+         COALESCE(SUM(fb.grand_total), 0) as total_sales
+       FROM shops s
+       LEFT JOIN final_bill fb ON fb.shop_id = s.id
+       WHERE COALESCE(s.is_active, 1) = 1${shopFilter}${billDateFilter}
+       GROUP BY s.id, s.name
+       ORDER BY total_sales DESC
+       LIMIT 10`,
+      withShopAndDate()
+    );
+
+    res.json({
+      success: true,
+      data: {
+        totalShops,
+        activeShops,
+        totalUsers,
+        totalRevenue,
+        pendingBills,
+        lastMonthRevenue,
+        subscriptionDistribution,
+        topShops,
+        dateRange: hasDateRange ? { start_date, end_date } : null
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });
   }
@@ -1261,39 +1496,129 @@ exports.getShopComparison = async (req, res) => {
  */
 exports.getSystemHealth = async (req, res) => {
   try {
-    const metrics = {
-      totalShops: 'SELECT COUNT(*) as count FROM shops',
-      activeShops: 'SELECT COUNT(*) as count FROM shops WHERE is_active = 1 AND subscription_status = "active"',
-      totalUsers: 'SELECT COUNT(*) as count FROM users',
-      activeUsers: 'SELECT COUNT(*) as count FROM users WHERE is_active = 1',
-      totalRevenue: 'SELECT COALESCE(SUM(amount_paid), 0) as total FROM shop_billing WHERE billing_status = "paid"',
-      pendingPayments: 'SELECT COALESCE(SUM(amount_due - amount_paid), 0) as pending FROM shop_billing WHERE billing_status IN ("pending", "overdue")',
-      activeSubscriptions: `
-        SELECT 
-          sp.name as plan_name,
-          COUNT(*) as shop_count
-        FROM shops s
-        JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
-        WHERE s.subscription_status = "active"
-        GROUP BY sp.id
-      `,
-      databaseSize: 'SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.TABLES WHERE table_schema = DATABASE()'
+    const { shop_id, start_date, end_date } = req.query;
+    const hasShopFilter = !!shop_id;
+    const hasDateRange = !!(start_date && end_date);
+
+    const shopFilter = hasShopFilter ? ' AND s.id = ?' : '';
+    const userFilter = hasShopFilter ? ' AND u.shop_id = ?' : '';
+    const paymentFilter = hasShopFilter ? ' AND pr.shop_id = ?' : '';
+    const rangeFilter = hasDateRange ? ' AND DATE(COALESCE(pr.paid_date, pr.created_at)) BETWEEN ? AND ?' : '';
+
+    const withShopAndRange = () => {
+      const params = [];
+      if (hasShopFilter) params.push(shop_id);
+      if (hasDateRange) params.push(start_date, end_date);
+      return params;
+    };
+    const withShopOnly = () => (hasShopFilter ? [shop_id] : []);
+    const health = {
+      totalShops: 0,
+      activeUsers: 0,
+      todayBills: 0,
+      todayRevenue: 0,
+      dbSize: 0
     };
 
-    const health = {};
+    try {
+      const [rows] = await db.query(
+        `SELECT COUNT(*) as count FROM shops s WHERE COALESCE(s.is_active, 1) = 1${shopFilter}`,
+        withShopOnly()
+      );
+      health.totalShops = Number(rows?.[0]?.count || 0);
+    } catch {}
 
-    for (const [key, sql] of Object.entries(metrics)) {
-      try {
-        const [results] = await db.query(sql);
-        if (key === 'activeSubscriptions') {
-          health[key] = results;
-        } else {
-          health[key] = results[0];
-        }
-      } catch {
-        health[key] = null;
+    try {
+      const [rows] = await db.query(
+        `SELECT COUNT(*) as count FROM users u WHERE 1=1${userFilter}`,
+        withShopOnly()
+      );
+      health.activeUsers = Number(rows?.[0]?.count || 0);
+    } catch {}
+
+    try {
+      const dateClause = hasDateRange ? rangeFilter : ' AND DATE(pr.created_at) = CURDATE()';
+      const [rows] = await db.query(
+        `SELECT COUNT(*) as count
+         FROM payment_records pr
+         WHERE 1=1${paymentFilter}${dateClause}`,
+        hasDateRange ? withShopAndRange() : withShopOnly()
+      );
+      health.todayBills = Number(rows?.[0]?.count || 0);
+    } catch {}
+
+    try {
+      const dateClause = hasDateRange ? rangeFilter : ' AND DATE(COALESCE(pr.paid_date, pr.created_at)) = CURDATE()';
+      const [rows] = await db.query(
+        `SELECT COALESCE(SUM(pr.amount), 0) as total
+         FROM payment_records pr
+         WHERE pr.payment_status = 'COMPLETED'${paymentFilter}${dateClause}`,
+        hasDateRange ? withShopAndRange() : withShopOnly()
+      );
+      health.todayRevenue = Number(rows?.[0]?.total || 0);
+    } catch {}
+
+    try {
+      const [rows] = await db.query(
+        'SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.TABLES WHERE table_schema = DATABASE()'
+      );
+      health.dbSize = Number(rows?.[0]?.size_mb || 0);
+    } catch {}
+
+    // Server-level health snapshot
+    const toMB = (bytes) => Number((bytes / 1024 / 1024).toFixed(2));
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const memUsagePercent = totalMem > 0 ? Number(((usedMem / totalMem) * 100).toFixed(2)) : 0;
+    const processCpuUsagePercent = getProcessCpuUsagePercent();
+    const systemCpuUsagePercent = getSystemCpuUsagePercent();
+
+    const runtimeMemory = process.memoryUsage();
+    const serverHealth = {
+      timestamp: new Date().toISOString(),
+      hostname: os.hostname(),
+      environment: getRuntimeEnvironmentName(),
+      primaryIp: getPrimaryServerIp(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      uptimeHuman: `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
+      platform: os.platform(),
+      release: os.release(),
+      nodeVersion: process.version,
+      cpuCores: os.cpus()?.length || 0,
+      cpuModel: os.cpus()?.[0]?.model || 'Unknown',
+      cpuUsagePercent: systemCpuUsagePercent,
+      processCpuUsagePercent,
+      loadAverage: os.loadavg(),
+      memory: {
+        totalMB: toMB(totalMem),
+        usedMB: toMB(usedMem),
+        freeMB: toMB(freeMem),
+        usagePercent: memUsagePercent
+      },
+      processMemory: {
+        rssMB: toMB(runtimeMemory.rss),
+        heapTotalMB: toMB(runtimeMemory.heapTotal),
+        heapUsedMB: toMB(runtimeMemory.heapUsed),
+        externalMB: toMB(runtimeMemory.external)
+      },
+      database: {
+        status: 'unknown',
+        pingMs: null
       }
+    };
+
+    try {
+      const pingStart = Date.now();
+      await db.query('SELECT 1');
+      serverHealth.database.status = 'up';
+      serverHealth.database.pingMs = Date.now() - pingStart;
+    } catch {
+      serverHealth.database.status = 'down';
     }
+
+    health.server = serverHealth;
+    health.dateRange = hasDateRange ? { start_date, end_date } : null;
 
     res.json({ success: true, data: health });
   } catch (error) {

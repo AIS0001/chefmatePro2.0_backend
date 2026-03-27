@@ -5,14 +5,69 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
+const { requireShopId, tableHasShopId } = require('../helpers/shopScope');
+const { normalizeBillPrefix } = require('../helpers/shopBillPrefix');
+
+async function releaseInvoiceSeriesLock(connection, lockName) {
+  if (!lockName) {
+    return;
+  }
+
+  try {
+    await connection.query('SELECT RELEASE_LOCK(?)', [lockName]);
+  } catch (lockError) {
+    console.error('Error releasing invoice series lock:', lockError);
+  }
+}
+
+async function generateShopInvoiceNumber(connection, shopId) {
+  const lockName = `bill-series-shop-${shopId}`;
+  const [lockRows] = await connection.query('SELECT GET_LOCK(?, 10) AS lock_acquired', [lockName]);
+
+  if (!lockRows?.[0]?.lock_acquired) {
+    throw new Error(`Unable to acquire invoice series lock for shop ${shopId}`);
+  }
+
+  try {
+    const [shopRows] = await connection.query('SELECT name, bill_prefix FROM shops WHERE id = ? LIMIT 1', [shopId]);
+    const shopName = shopRows?.[0]?.name || `SHOP ${shopId}`;
+    const prefix = normalizeBillPrefix(shopRows?.[0]?.bill_prefix, shopName);
+    const regexpPattern = `^${prefix}[0-9]+$`;
+
+    const [seriesRows] = await connection.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(inv_number, ?) AS UNSIGNED)), 0) AS current_sequence
+       FROM final_bill
+       WHERE shop_id = ?
+         AND inv_number REGEXP ?`,
+      [prefix.length + 1, shopId, regexpPattern]
+    );
+
+    const currentSequence = Number(seriesRows?.[0]?.current_sequence ?? 0) || 0;
+    const nextSequence = currentSequence + 1;
+
+    return {
+      invNumber: `${prefix}${String(nextSequence).padStart(3, '0')}`,
+      lockName,
+    };
+  } catch (error) {
+    await releaseInvoiceSeriesLock(connection, lockName);
+    throw error;
+  }
+}
 
 // ✅ Function to Save a New Bill
 
 const savebill = async (req, res) => {
   const connection = await db.getConnection(); // Get a connection from the pool
+  let invoiceLockName = null;
 
   try {
     await connection.beginTransaction(); // Start transaction
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
 
     const { customer_id, tablenumber, subtotal, subtotal_afterdiscount, tax, discount_type, discount_value, round_off, grand_total, payment_mode, status, setup_date } = req.body;
 
@@ -22,19 +77,26 @@ const savebill = async (req, res) => {
 
     // Insert Bill into `final_bill`
     const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
-        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
+        INSERT INTO final_bill (shop_id, customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
+        VALUES (?, ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
       `;
 
     console.log('Executing Query:', billQuery);
 
     const [billResult] = await connection.execute(
       billQuery,
-      [customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
+      [shopId, customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
     );
 
     const bill_id = billResult.insertId; // Get the final bill ID
     if (!bill_id) throw new Error("Bill ID not generated");
+    const { invNumber, lockName } = await generateShopInvoiceNumber(connection, shopId);
+    invoiceLockName = lockName;
+
+    await connection.execute(
+      `UPDATE final_bill SET inv_number = ? WHERE id = ? AND shop_id = ?`,
+      [invNumber, bill_id, shopId]
+    );
 
     // Use `bill_id` as `transaction_id`
     const transaction_id = bill_id;
@@ -49,23 +111,23 @@ const savebill = async (req, res) => {
 
     // Create Ledger Entries
     let ledgerEntries = [
-      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sale Revenue`, 0.00, grand_total, "NULL"]
+      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${invNumber} - Sale Revenue`, 0.00, grand_total, "NULL"]
     ];
 
     if (payment_mode === "Cash") {
-      ledgerEntries.push([transaction_id, new Date(), "Cash", null, `Bill #${bill_id} - Cash Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Cash", null, `Bill #${invNumber} - Cash Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Bank Transfer") {
-      ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", null, `Bill #${bill_id} - Bank Transfer Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Bank Transfer", null, `Bill #${invNumber} - Bank Transfer Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "QR Code" || payment_mode === "QR Scan") {
-      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${invNumber} - QR Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "UPI") {
-      ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${invNumber} - UPI Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Credit") {
-      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${invNumber} - Credit Sale`, grand_total, 0.00, "NULL"]);
     }
 
     // if (discount_amount > 0) {
@@ -102,21 +164,30 @@ const savebill = async (req, res) => {
     await connection.query(ledgerQuery, [ledgerEntries]);
 
     await connection.commit(); // Commit transaction
-    res.status(201).json({ success: true, message: "Bill & Ledger saved successfully!", bill_id });
+    await releaseInvoiceSeriesLock(connection, invoiceLockName);
+    invoiceLockName = null;
+    res.status(201).json({ success: true, message: "Bill & Ledger saved successfully!", bill_id, inv_number: invNumber });
 
   } catch (error) {
     await connection.rollback(); // Rollback on error
     console.error("Error saving bill:", error);
     res.status(500).json({ success: false, message: "Error saving bill", error });
   } finally {
+    await releaseInvoiceSeriesLock(connection, invoiceLockName);
     connection.release(); // Release the connection back to the pool
   }
 };
 const kiosksavebill = async (req, res) => {
   const connection = await db.getConnection(); // Get a connection from the pool
+  let invoiceLockName = null;
 
   try {
     await connection.beginTransaction(); // Start transaction
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
 
     let { tablenumber, subtotal, subtotal_afterdiscount, tax, discount_type, discount_value, round_off, grand_total, payment_mode, status, setup_date } = req.body;
 
@@ -135,19 +206,26 @@ const kiosksavebill = async (req, res) => {
 
     // Insert Bill into `final_bill` - customer_id can be NULL for walk-in customers
     const billQuery = `
-        INSERT INTO final_bill (customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
-        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
+        INSERT INTO final_bill (shop_id, customer_id, inv_date, inv_time, table_number,subtotal, discount_type, discount_value,discount_amount,subtotal_afterdiscount, tax, roundoff, grand_total, payment_mode,status, setup_date)
+        VALUES (?, ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)
       `;
 
     console.log('Executing Query:', billQuery);
 
     const [billResult] = await connection.execute(
       billQuery,
-      [customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
+      [shopId, customer_id, tablenumber, subtotal, discount_type, discount_value, discount_amount, subtotal_afterdiscount, tax, round_off, grand_total, payment_mode, status, setup_date]
     );
 
     const bill_id = billResult.insertId; // Get the final bill ID
     if (!bill_id) throw new Error("Bill ID not generated");
+    const { invNumber, lockName } = await generateShopInvoiceNumber(connection, shopId);
+    invoiceLockName = lockName;
+
+    await connection.execute(
+      `UPDATE final_bill SET inv_number = ? WHERE id = ? AND shop_id = ?`,
+      [invNumber, bill_id, shopId]
+    );
 
     // Use `bill_id` as `transaction_id`
     const transaction_id = bill_id;
@@ -173,14 +251,14 @@ const kiosksavebill = async (req, res) => {
 
     // Create Ledger Entries - Only QR Code or Card
     let ledgerEntries = [
-      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${bill_id} - Sale Revenue`, 0.00, grand_total, "NULL"]
+      [transaction_id, new Date(), "Sales", sales_account_id, `Bill #${invNumber} - Sale Revenue`, 0.00, grand_total, "NULL"]
     ];
 
     if (payment_mode === "QR Code" || payment_mode === "QR Scan") {
-      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${bill_id} - QR Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "QR Code", null, `Bill #${invNumber} - QR Payment`, grand_total, 0.00, "NULL"]);
     }
     else if (payment_mode === "Card") {
-      ledgerEntries.push([transaction_id, new Date(), "Card", null, `Bill #${bill_id} - Card Payment`, grand_total, 0.00, "NULL"]);
+      ledgerEntries.push([transaction_id, new Date(), "Card", null, `Bill #${invNumber} - Card Payment`, grand_total, 0.00, "NULL"]);
     }
 
     // Insert into `ledger_entries`
@@ -192,13 +270,16 @@ const kiosksavebill = async (req, res) => {
     await connection.query(ledgerQuery, [ledgerEntries]);
 
     await connection.commit(); // Commit transaction
-    res.status(201).json({ success: true, message: "Bill & Queue saved successfully!", bill_id, queue_number: nextQueueNo });
+    await releaseInvoiceSeriesLock(connection, invoiceLockName);
+    invoiceLockName = null;
+    res.status(201).json({ success: true, message: "Bill & Queue saved successfully!", bill_id, inv_number: invNumber, queue_number: nextQueueNo });
 
   } catch (error) {
     await connection.rollback(); // Rollback on error
     console.error("Error saving bill:", error);
     res.status(500).json({ success: false, message: "Error saving bill", error });
   } finally {
+    await releaseInvoiceSeriesLock(connection, invoiceLockName);
     connection.release(); // Release the connection back to the pool
   }
 };
@@ -207,6 +288,11 @@ const advancesavebill = async (req, res) => {
 
   try {
     await connection.beginTransaction(); // Start transaction
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
 
     const {
       customer_id,
@@ -234,7 +320,7 @@ const advancesavebill = async (req, res) => {
     // Insert into `final_bill`
     const billQuery = `
       INSERT INTO advance_final_bill (
-        customer_id, inv_date, inv_time, table_number,
+        shop_id, customer_id, inv_date, inv_time, table_number,
         subtotal, discount_type, discount_value, discount_amount,
         subtotal_afterdiscount, tax, roundoff, grand_total,
         payment_mode, status, pickup_date, pickup_time,
@@ -242,13 +328,14 @@ const advancesavebill = async (req, res) => {
         final_billed, paid_amount, setup_date
       )
       VALUES (
-        ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `;
 
     const [billResult] = await connection.execute(
       billQuery,
       [
+        shopId,
         customer_id,
         table_number,
         subtotal,
@@ -326,7 +413,10 @@ const advancesavebill = async (req, res) => {
 // ✅ Function to Retrieve All Bills
 const getBills = async (req, res) => {
   try {
-    const [rows] = await db.execute("SELECT * FROM final_bill ORDER BY inv_date DESC");
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
+    const [rows] = await db.execute("SELECT * FROM final_bill WHERE shop_id = ? ORDER BY inv_date DESC", [shopId]);
     res.status(200).json({ success: true, data: rows });
   } catch (error) {
     console.error("Error fetching bills:", error);
@@ -337,8 +427,11 @@ const getBills = async (req, res) => {
 // ✅ Function to Get a Single Bill by ID
 const getBillById = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { id } = req.params;
-    const [rows] = await db.execute("SELECT * FROM final_bill WHERE id = ?", [id]);
+    const [rows] = await db.execute("SELECT * FROM final_bill WHERE id = ? AND shop_id = ?", [id, shopId]);
 
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: "Bill not found" });
@@ -356,14 +449,25 @@ const deleteBill = async (req, res) => {
   const connection = await db.getConnection(); // Get a connection from the pool
   try {
     await connection.beginTransaction();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
 
     const { id } = req.params;
+
+    const [billRows] = await connection.execute("SELECT id FROM final_bill WHERE id = ? AND shop_id = ?", [id, shopId]);
+    if (billRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: "Bill not found" });
+    }
 
     // Delete Ledger Entries First
     await connection.execute("DELETE FROM ledger_entries WHERE reference_id = ?", [id]);
 
     // Then Delete Bill
-    const [result] = await connection.execute("DELETE FROM final_bill WHERE id = ?", [id]);
+    const [result] = await connection.execute("DELETE FROM final_bill WHERE id = ? AND shop_id = ?", [id, shopId]);
 
     if (result.affectedRows === 0) {
       await connection.rollback();
@@ -388,21 +492,26 @@ const updateBill = async (req, res) => {
 
   try {
     await connection.beginTransaction();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
 
     const { id } = req.params;
     const { subtotal, tax, discount_type, discount_value, roundoff, payment_mode } = req.body;
 
     let discount_amount = discount_type === "percentage" ? (subtotal * discount_value) / 100 : discount_value;
-    let grand_total = subtotal + tax - discount_amount + round_off;
+    let grand_total = subtotal + tax - discount_amount + roundoff;
 
     // Update Bill
     const updateQuery = `
       UPDATE final_bill 
-      SET subtotal = ?, tax = ?, discount_type = ?, discount_value = ?, discount_amount = ?, round_off = ?, grand_total = ?, payment_mode = ? 
-      WHERE id = ?
+      SET subtotal = ?, tax = ?, discount_type = ?, discount_value = ?, discount_amount = ?, roundoff = ?, grand_total = ?, payment_mode = ? 
+      WHERE id = ? AND shop_id = ?
     `;
     const [result] = await connection.execute(updateQuery, [
-      subtotal, tax, discount_type, discount_value, discount_amount, round_off, grand_total, payment_mode, id
+      subtotal, tax, discount_type, discount_value, discount_amount, roundoff, grand_total, payment_mode, id, shopId
     ]);
 
     if (result.affectedRows === 0) {
@@ -498,6 +607,12 @@ const savePayment = async (req, res) => {
   await connection.beginTransaction();
 
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
+
     const { customer_id, amount_paid, payment_mode, reference_number } = req.body;
     if (!customer_id || amount_paid === undefined || !payment_mode) {
       return res.status(400).json({ success: false, message: "Invalid payment data." });
@@ -509,15 +624,18 @@ const savePayment = async (req, res) => {
     // Fetch unpaid invoices
     const [invoices] = await connection.execute(`
       SELECT id, grand_total, paid_amount FROM final_bill 
-      WHERE customer_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
+      WHERE customer_id = ? AND shop_id = ? AND payment_mode = 'Credit' AND status != 'Paid'
       ORDER BY inv_date ASC;
-    `, [customer_id]);
+    `, [customer_id, shopId]);
 
     if (!invoices || invoices.length === 0) {
       return res.status(400).json({ success: false, message: "No outstanding invoices." });
     }
 
     console.log("Received Payment Data:", req.body);
+
+    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    const receiptVoucherHasShopId = await tableHasShopId(db, 'receipt_vouchers');
 
     let payments = [];
 
@@ -534,28 +652,53 @@ const savePayment = async (req, res) => {
       await connection.execute(`
         UPDATE final_bill 
         SET paid_amount = paid_amount + ?, status = ? 
-        WHERE id = ?;
-      `, [payment_to_apply, new_status, invoice.id]);
+        WHERE id = ? AND shop_id = ?;
+      `, [payment_to_apply, new_status, invoice.id, shopId]);
 
-      payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
-      payments.push([invoice.id, new Date(), "Account Recievable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
+      if (ledgerHasShopId) {
+        payments.push([shopId, invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
+        payments.push([shopId, invoice.id, new Date(), "Account Recievable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
+      } else {
+        payments.push([invoice.id, new Date(), payment_mode, null, "Customer Payment Received", payment_to_apply, 0.00]);
+        payments.push([invoice.id, new Date(), "Account Recievable", customer_id, "Credit Paid", 0.00, payment_to_apply]);
+      }
     }
 
     // ✅ Single receipt_voucher entry (not one per invoice)
-    await connection.execute(`
-      INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
-      VALUES (?, ?, ?, ?, ?, NOW());
-    `, [
-      customer_id,
-      `RECPT_${Date.now()}`, // generate a unique ID for the overall receipt
-      total_applied,
-      payment_mode,
-      reference_number
-    ]);
+    if (receiptVoucherHasShopId) {
+      await connection.execute(`
+        INSERT INTO receipt_vouchers (shop_id, customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW());
+      `, [
+        shopId,
+        customer_id,
+        `RECPT_${Date.now()}`,
+        total_applied,
+        payment_mode,
+        reference_number
+      ]);
+    } else {
+      await connection.execute(`
+        INSERT INTO receipt_vouchers (customer_id, transaction_id, amount_paid, payment_mode, reference_id, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW());
+      `, [
+        customer_id,
+        `RECPT_${Date.now()}`,
+        total_applied,
+        payment_mode,
+        reference_number
+      ]);
+    }
 
-    await connection.query(`
-      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-    `, [payments]);
+    if (ledgerHasShopId) {
+      await connection.query(`
+        INSERT INTO ledger_entries (shop_id, reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [payments]);
+    } else {
+      await connection.query(`
+        INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [payments]);
+    }
 
     await connection.commit();
     res.status(201).json({ success: true, message: "Payment recorded successfully!" });
@@ -575,6 +718,12 @@ const saveSupplierPayment = async (req, res) => {
   await connection.beginTransaction();
 
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
+
     const { supplier_id, amount_paid, payment_mode, reference_number, remarks } = req.body;
     if (!supplier_id || amount_paid === undefined || !payment_mode) {
       return res.status(400).json({ success: false, message: "Invalid payment data." });
@@ -604,20 +753,40 @@ const saveSupplierPayment = async (req, res) => {
     // Insert ledger entries for the payment
     // 1. Debit entry for the payment account (e.g., Cash/Bank)
     // 2. Credit entry for the supplier account (supplier_id)
-    const ledgerEntries = [
-      [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
-      [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
-    ];
+    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    const paymentVoucherHasShopId = await tableHasShopId(db, 'payment_vouchers');
+    const ledgerEntries = ledgerHasShopId
+      ? [
+          [shopId, reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
+          [shopId, reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
+        ]
+      : [
+          [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
+          [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
+        ];
     // const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
-    await connection.query(`
-      INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-    `, [ledgerEntries]);
+    if (ledgerHasShopId) {
+      await connection.query(`
+        INSERT INTO ledger_entries (shop_id, reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [ledgerEntries]);
+    } else {
+      await connection.query(`
+        INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [ledgerEntries]);
+    }
 
     // Insert into payment_voucher table
-    await connection.execute(`
-      INSERT INTO payment_vouchers (supplier_id, amount_paid, payment_mode, reference_id,remarks, created_at)
-      VALUES (?, ?, ?, ?, ?, NOW())
-    `, [supplier_id, amount_paid, payment_mode, reference_number, remarks]);
+    if (paymentVoucherHasShopId) {
+      await connection.execute(`
+        INSERT INTO payment_vouchers (shop_id, supplier_id, amount_paid, payment_mode, reference_id, remarks, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `, [shopId, supplier_id, amount_paid, payment_mode, reference_number, remarks]);
+    } else {
+      await connection.execute(`
+        INSERT INTO payment_vouchers (supplier_id, amount_paid, payment_mode, reference_id, remarks, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
+      `, [supplier_id, amount_paid, payment_mode, reference_number, remarks]);
+    }
 
     await connection.commit();
     res.status(201).json({ success: true, message: "Supplier payment recorded successfully!" });
@@ -634,19 +803,24 @@ const saveSupplierPayment = async (req, res) => {
 
 const getOutstandingBalance = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { ac_type, customer_id } = req.params;
     //console.log("Params received:", req.params);
 
     const query = `
       SELECT 
-        SUM(debit_amount) - SUM(credit_amount) AS outstanding_balance
-      FROM ledger_entries
-      WHERE account_type = ? 
-      AND account_id = ?;
+        SUM(le.debit_amount) - SUM(le.credit_amount) AS outstanding_balance
+      FROM ledger_entries le
+      INNER JOIN customers c ON c.id = le.account_id
+      WHERE le.account_type = ? 
+      AND le.account_id = ?
+      AND c.shop_id = ?;
     `;
     //console.log(query);
 
-    const [result] = await db.execute(query, [ac_type, customer_id]);
+    const [result] = await db.execute(query, [ac_type, customer_id, shopId]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
     //console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
@@ -662,17 +836,20 @@ const getOutstandingBalance = async (req, res) => {
 
 const getCustomerInvoices = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const { customer_id } = req.params;
 
     // Fetch all unpaid invoices for the customer
     const query = `
-          SELECT id,  net_total, status
+          SELECT id, grand_total AS net_total, status
           FROM final_bill
-          WHERE customer_id = ? AND status = '1'
+          WHERE customer_id = ? AND shop_id = ? AND status = '1'
           ORDER BY inv_date DESC;
       `;
 
-    const [invoices] = await db.execute(query, [customer_id]);
+        const [invoices] = await db.execute(query, [customer_id, shopId]);
 
     res.status(200).json({ success: true, invoices });
 

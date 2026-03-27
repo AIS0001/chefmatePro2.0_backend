@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const superAdminController = require('../controllers/superAdminController');
+const monitoringSupportController = require('../controllers/monitoringSupportController');
+const paymentController = require('../controllers/paymentController');
 const { authMiddleware } = require('../middleware/authMiddleware');
 
 // Ensure user is authenticated and is super admin
@@ -142,5 +144,106 @@ router.get('/analytics/system-health', authMiddleware, superAdminAuth, superAdmi
 
 // Get audit logs
 router.get('/audit-logs', authMiddleware, superAdminAuth, superAdminController.getAuditLogs);
+
+// =====================================================
+// ERROR LOGS & MONITORING ROUTES
+// =====================================================
+
+// Get all error logs with filters
+router.get('/error-logs', authMiddleware, superAdminAuth, monitoringSupportController.getErrorLogs);
+
+// Get single error log detail
+router.get('/error-logs/:id', authMiddleware, superAdminAuth, monitoringSupportController.getErrorLogDetail);
+
+// Update error log status and notes
+router.put('/error-logs/:id', authMiddleware, superAdminAuth, monitoringSupportController.updateErrorLogStatus);
+
+// Log an error (called from application)
+router.post('/error-logs', monitoringSupportController.logError);
+
+// =====================================================
+// SUPPORT TICKETS ROUTES
+// =====================================================
+
+// Get all support tickets
+router.get('/support-tickets', authMiddleware, superAdminAuth, monitoringSupportController.getSupportTickets);
+
+// Get single support ticket with comments
+router.get('/support-tickets/:id', authMiddleware, superAdminAuth, monitoringSupportController.getSupportTicketDetail);
+
+// Create new support ticket
+router.post('/support-tickets', authMiddleware, superAdminAuth, monitoringSupportController.createSupportTicket);
+
+// Update support ticket
+router.put('/support-tickets/:id', authMiddleware, superAdminAuth, monitoringSupportController.updateSupportTicket);
+
+// Add comment to ticket
+router.post('/support-tickets/:ticket_id/comments', authMiddleware, superAdminAuth, monitoringSupportController.addTicketComment);
+
+// Get monitoring dashboard statistics
+router.get('/monitoring/stats', authMiddleware, superAdminAuth, monitoringSupportController.getMonitoringStats);
+
+// =====================================================
+// FILE-BASED ERROR LOGS ROUTES
+// =====================================================
+
+// Get error logs from text files
+router.get('/file-error-logs', authMiddleware, superAdminAuth, monitoringSupportController.getFileErrorLogs);
+
+// Get file log statistics
+router.get('/file-log-stats', authMiddleware, superAdminAuth, monitoringSupportController.getFileLogStatistics);
+
+// Search file error logs
+router.get('/file-error-logs/search', authMiddleware, superAdminAuth, monitoringSupportController.searchFileErrorLogs);
+
+// Clear all logs from database and files
+router.delete('/logs/clear', authMiddleware, superAdminAuth, monitoringSupportController.clearAllErrorLogs);
+
+// =====================================================
+// SUBSCRIPTION PLANS ROUTES
+// =====================================================
+
+// Get all subscription plans
+router.get('/subscription-plans', authMiddleware, superAdminAuth, paymentController.getSubscriptionPlans);
+
+// Create or update subscription plan
+router.post('/subscription-plans', authMiddleware, superAdminAuth, paymentController.upsertSubscriptionPlan);
+router.put('/subscription-plans/:id', authMiddleware, superAdminAuth, paymentController.upsertSubscriptionPlan);
+
+// =====================================================
+// SHOP SUBSCRIPTION ROUTES
+// =====================================================
+
+// Get shop subscription
+router.get('/shops/:shop_id/subscription', authMiddleware, superAdminAuth, paymentController.getShopSubscription);
+
+// Get all shop subscriptions
+router.get('/subscriptions', authMiddleware, superAdminAuth, paymentController.getAllShopSubscriptions);
+
+// Create or update shop subscription
+router.post('/subscriptions', authMiddleware, superAdminAuth, paymentController.upsertShopSubscription);
+router.put('/subscriptions/:shop_id', authMiddleware, superAdminAuth, paymentController.upsertShopSubscription);
+
+// =====================================================
+// PAYMENT RECORDS ROUTES
+// =====================================================
+
+// Get all payment records with filters
+router.get('/payment-records', authMiddleware, superAdminAuth, paymentController.getPaymentRecords);
+
+// Get shop payment history
+router.get('/shops/:shop_id/payment-history', authMiddleware, superAdminAuth, paymentController.getShopPaymentHistory);
+
+// Create payment record
+router.post('/payment-records', authMiddleware, superAdminAuth, paymentController.createPaymentRecord);
+
+// Update payment status
+router.put('/payment-records/:id', authMiddleware, superAdminAuth, paymentController.updatePaymentStatus);
+
+// Get payment statistics
+router.get('/payment-stats', authMiddleware, superAdminAuth, paymentController.getPaymentStats);
+
+// Get overdue payments
+router.get('/overdue-payments', authMiddleware, superAdminAuth, paymentController.getOverduePayments);
 
 module.exports = router;

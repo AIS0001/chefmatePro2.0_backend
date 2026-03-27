@@ -26,6 +26,22 @@ ADD COLUMN `shop_id` INT DEFAULT 1 NOT NULL AFTER `id`;
 
 CREATE INDEX `idx_final_bill_shop_id` ON `final_bill` (`shop_id`);
 
+ALTER TABLE `subcategory` 
+ADD COLUMN `shop_id` INT DEFAULT 1 NOT NULL AFTER `id`;
+
+CREATE INDEX `idx_subcategory_shop_id` ON `subcategory` (`shop_id`);
+
+
+ALTER TABLE `ledger_entries` 
+ADD COLUMN `shop_id` INT DEFAULT 1 NOT NULL AFTER `id`;
+
+CREATE INDEX `idx_ledger_entries_shop_id` ON `ledger_entries` (`shop_id`);
+
+
+ALTER TABLE `payment_vouchers` 
+ADD COLUMN `shop_id` INT DEFAULT 1 NOT NULL AFTER `id`;
+
+CREATE INDEX `idx_payment_vouchers_shop_id` ON `payment_vouchers` (`shop_id`);
 -- ======================================================================
 -- 4. USERS TABLE
 -- ======================================================================

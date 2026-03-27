@@ -1,20 +1,37 @@
 const { db } = require("../config/dbconnection");
 const { getLocalMacAddress, getMacFromArp, formatMacAddress, normalizeMac } = require("../helpers/deviceAuthUtils");
+const jwt = require('jsonwebtoken');
+
+const resolveShopId = (req) => {
+  const candidate = req.query?.shop_id || req.user?.shop_id || req.shop_id;
+  const parsed = Number.parseInt(candidate, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
 
 /**
- * Get all users with UUID for machine selection
+ * Get all users with UUID for machine selection (shop-scoped)
  * GET /printer/users-with-uuid
  */
 const getUsersWithUuid = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
+
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
+
     const [users] = await db.query(
-      "SELECT id, name, uname, user_uuid FROM users WHERE user_uuid IS NOT NULL AND status = 1 ORDER BY name ASC"
+      "SELECT id, name, uname, user_uuid FROM users WHERE user_uuid IS NOT NULL AND status = 1 AND shop_id = ? ORDER BY name ASC",
+      [shopId]
     );
 
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No machines registered yet. Please login to generate UUID."
+        message: "No machines registered yet for this shop. Please login to generate UUID."
       });
     }
 
@@ -41,6 +58,14 @@ const getUsersWithUuid = async (req, res) => {
 const savePrinterConfig = async (req, res) => {
   try {
     const { terminal_id, machine_uuid, location, printer_ip, printer_port = 9100, printer_name } = req.body;
+    const shopId = resolveShopId(req);
+
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id for printer configuration"
+      });
+    }
 
     // Validation
     if (!terminal_id || !location || !printer_ip) {
@@ -82,23 +107,23 @@ const savePrinterConfig = async (req, res) => {
       }
     }
 
-    // Check if terminal_id already exists
+    // Check if terminal_id already exists for this shop
     const [existing] = await db.query(
-      "SELECT id FROM printer_config WHERE terminal_id = ?",
-      [terminal_id]
+      "SELECT id FROM printer_config WHERE terminal_id = ? AND shop_id = ?",
+      [terminal_id, shopId]
     );
 
     if (existing.length > 0) {
       return res.status(409).json({
         success: false,
-        message: `Terminal ID '${terminal_id}' already configured`
+        message: `Terminal ID '${terminal_id}' already configured for this shop`
       });
     }
 
     // Insert new printer configuration
     const [result] = await db.query(
-      "INSERT INTO printer_config (terminal_id, machine_uuid, location, printer_ip, printer_port, printer_name, status) VALUES (?, ?, ?, ?, ?, ?, 'active')",
-      [terminal_id, machine_uuid || null, location, printer_ip, printer_port, printer_name || null]
+      "INSERT INTO printer_config (shop_id, terminal_id, machine_uuid, location, printer_ip, printer_port, printer_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
+      [shopId, terminal_id, machine_uuid || null, location, printer_ip, printer_port, printer_name || null]
     );
 
     res.status(201).json({
@@ -133,6 +158,7 @@ const savePrinterConfig = async (req, res) => {
 const getPrinterDetails = async (req, res) => {
   try {
     const { terminal_id } = req.params;
+    const shopId = resolveShopId(req);
 
     if (!terminal_id) {
       return res.status(400).json({
@@ -141,9 +167,16 @@ const getPrinterDetails = async (req, res) => {
       });
     }
 
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
+
     const [rows] = await db.query(
-      "SELECT * FROM printer_config WHERE terminal_id = ?",
-      [terminal_id]
+      "SELECT * FROM printer_config WHERE terminal_id = ? AND shop_id = ?",
+      [terminal_id, shopId]
     );
 
     if (rows.length === 0) {
@@ -174,6 +207,7 @@ const getPrinterDetails = async (req, res) => {
 const getPrintersByLocation = async (req, res) => {
   try {
     const { location } = req.params;
+    const shopId = resolveShopId(req);
 
     if (!location || !["kitchen", "cashier"].includes(location)) {
       return res.status(400).json({
@@ -182,9 +216,17 @@ const getPrintersByLocation = async (req, res) => {
       });
     }
 
+    if (!shopId) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    }
+
     const [rows] = await db.query(
-      "SELECT * FROM printer_config WHERE location = ? AND status = 'active' ORDER BY created_at DESC",
-      [location]
+      "SELECT * FROM printer_config WHERE shop_id = ? AND location = ? AND status = 'active' ORDER BY created_at DESC",
+      [shopId, location]
     );
 
     res.json({
@@ -208,8 +250,18 @@ const getPrintersByLocation = async (req, res) => {
  */
 const getAllPrinterConfigs = async (req, res) => {
   try {
+    const shopId = resolveShopId(req);
+    if (!shopId) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    }
+
     const [rows] = await db.query(
-      "SELECT * FROM printer_config WHERE status = 'active' ORDER BY location, created_at DESC"
+      "SELECT * FROM printer_config WHERE shop_id = ? AND status = 'active' ORDER BY location, created_at DESC",
+      [shopId]
     );
 
     res.json({
@@ -236,6 +288,7 @@ const updatePrinterDetails = async (req, res) => {
   try {
     const { terminal_id } = req.params;
     const { machine_uuid, printer_ip, printer_port, printer_name, status } = req.body;
+    const shopId = resolveShopId(req);
 
     if (!terminal_id) {
       return res.status(400).json({
@@ -244,10 +297,17 @@ const updatePrinterDetails = async (req, res) => {
       });
     }
 
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
+
     // Get current configuration
     const [existing] = await db.query(
-      "SELECT * FROM printer_config WHERE terminal_id = ?",
-      [terminal_id]
+      "SELECT * FROM printer_config WHERE terminal_id = ? AND shop_id = ?",
+      [terminal_id, shopId]
     );
 
     if (existing.length === 0) {
@@ -303,8 +363,8 @@ const updatePrinterDetails = async (req, res) => {
 
     // Update the configuration
     await db.query(
-      "UPDATE printer_config SET machine_uuid = ?, printer_ip = ?, printer_port = ?, printer_name = ?, status = ? WHERE terminal_id = ?",
-      [updateValues.machine_uuid, updateValues.printer_ip, updateValues.printer_port, updateValues.printer_name, updateValues.status, terminal_id]
+      "UPDATE printer_config SET machine_uuid = ?, printer_ip = ?, printer_port = ?, printer_name = ?, status = ? WHERE terminal_id = ? AND shop_id = ?",
+      [updateValues.machine_uuid, updateValues.printer_ip, updateValues.printer_port, updateValues.printer_name, updateValues.status, terminal_id, shopId]
     );
 
     res.json({
@@ -333,6 +393,7 @@ const updatePrinterDetails = async (req, res) => {
 const deletePrinterConfig = async (req, res) => {
   try {
     const { terminal_id } = req.params;
+    const shopId = resolveShopId(req);
 
     if (!terminal_id) {
       return res.status(400).json({
@@ -341,10 +402,17 @@ const deletePrinterConfig = async (req, res) => {
       });
     }
 
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
+
     // Check if exists
     const [existing] = await db.query(
-      "SELECT id FROM printer_config WHERE terminal_id = ?",
-      [terminal_id]
+      "SELECT id FROM printer_config WHERE terminal_id = ? AND shop_id = ?",
+      [terminal_id, shopId]
     );
 
     if (existing.length === 0) {
@@ -356,8 +424,8 @@ const deletePrinterConfig = async (req, res) => {
 
     // Delete configuration
     await db.query(
-      "DELETE FROM printer_config WHERE terminal_id = ?",
-      [terminal_id]
+      "DELETE FROM printer_config WHERE terminal_id = ? AND shop_id = ?",
+      [terminal_id, shopId]
     );
 
     res.json({
@@ -382,6 +450,7 @@ const deletePrinterConfig = async (req, res) => {
 const getPrinterByMachineUuid = async (req, res) => {
   try {
     const { machine_uuid } = req.params;
+    const shopId = resolveShopId(req);
 
     if (!machine_uuid) {
       return res.status(400).json({
@@ -390,9 +459,16 @@ const getPrinterByMachineUuid = async (req, res) => {
       });
     }
 
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
+
     const [rows] = await db.query(
-      "SELECT * FROM printer_config WHERE machine_uuid = ? AND status = 'active'",
-      [machine_uuid]
+      "SELECT * FROM printer_config WHERE machine_uuid = ? AND shop_id = ? AND status = 'active'",
+      [machine_uuid, shopId]
     );
 
     if (rows.length === 0) {
@@ -424,6 +500,14 @@ const getPrinterByMachineUuid = async (req, res) => {
 const detectAndGetPrinterConfig = async (req, res) => {
   try {
     const { type } = req.query; // 'kitchen' or 'cashier'
+    const shopId = resolveShopId(req);
+
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
 
     // Get client IP address
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
@@ -446,14 +530,14 @@ const detectAndGetPrinterConfig = async (req, res) => {
       console.log(`⚠️  MAC detection via ARP failed: ${err.message}`);
     }
 
-    let query = "SELECT * FROM printer_config WHERE status = 'active'";
-    let params = [];
+    let query = "SELECT * FROM printer_config WHERE shop_id = ? AND status = 'active'";
+    let params = [shopId];
 
     // If MAC detected, try MAC-based lookup first (highest priority)
     if (detectedMac) {
       const [macMatches] = await db.query(
-        "SELECT * FROM printer_config WHERE mac_address = ? AND status = 'active'",
-        [detectedMac]
+        "SELECT * FROM printer_config WHERE mac_address = ? AND shop_id = ? AND status = 'active'",
+        [detectedMac, shopId]
       );
 
       if (macMatches.length > 0) {
@@ -495,8 +579,8 @@ const detectAndGetPrinterConfig = async (req, res) => {
     // Fallback: Get printer by location/type
     if (type && ['kitchen', 'cashier'].includes(type)) {
       const [typeMatches] = await db.query(
-        "SELECT * FROM printer_config WHERE location = ? AND status = 'active' LIMIT 1",
-        [type]
+        "SELECT * FROM printer_config WHERE location = ? AND shop_id = ? AND status = 'active' LIMIT 1",
+        [type, shopId]
       );
 
       if (typeMatches.length > 0) {
@@ -534,7 +618,8 @@ const detectAndGetPrinterConfig = async (req, res) => {
 
     // No specific type requested - get first available printer
     const [allPrinters] = await db.query(
-      "SELECT * FROM printer_config WHERE status = 'active' LIMIT 1"
+      "SELECT * FROM printer_config WHERE shop_id = ? AND status = 'active' LIMIT 1",
+      [shopId]
     );
 
     if (allPrinters.length === 0) {
@@ -584,6 +669,14 @@ const detectAndGetPrinterConfig = async (req, res) => {
 const getAgentPrinterConfig = async (req, res) => {
   try {
     const { type, mac_address } = req.query;
+    const shopId = resolveShopId(req);
+
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to resolve shop_id"
+      });
+    }
 
     console.log(`🤖 Agent requesting printer - Type: ${type}, MAC: ${mac_address}`);
 
@@ -599,8 +692,8 @@ const getAgentPrinterConfig = async (req, res) => {
       }
 
       const [printers] = await db.query(
-        "SELECT * FROM printer_config WHERE mac_address = ? AND status = 'active'",
-        [mac_address]
+        "SELECT * FROM printer_config WHERE mac_address = ? AND shop_id = ? AND status = 'active'",
+        [mac_address, shopId]
       );
 
       if (printers.length === 0) {
@@ -638,8 +731,8 @@ const getAgentPrinterConfig = async (req, res) => {
     }
 
     const [printers] = await db.query(
-      "SELECT * FROM printer_config WHERE location = ? AND status = 'active'",
-      [type]
+      "SELECT * FROM printer_config WHERE location = ? AND shop_id = ? AND status = 'active'",
+      [type, shopId]
     );
 
     if (printers.length === 0) {

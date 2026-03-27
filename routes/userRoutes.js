@@ -33,8 +33,10 @@ router.post('/login',loginValidation, usercontroller.login);
 // Business date - derived from last day_close_summary
 router.get('/business-date', auth.isAuthorize, async (req, res) => {
   try {
+    const shopId = req.query.shop_id || req.user?.shop_id;
     const [rows] = await db.query(
-      'SELECT close_date FROM day_close_summary ORDER BY close_date DESC LIMIT 1'
+      'SELECT close_date FROM day_close_summary WHERE shop_id = ? ORDER BY close_date DESC LIMIT 1',
+      [shopId]
     );
     let businessDate;
     if (rows.length > 0 && rows[0].close_date) {

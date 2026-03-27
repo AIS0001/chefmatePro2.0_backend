@@ -5,11 +5,18 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
+const { requireShopId, tableHasShopId } = require('../helpers/shopScope');
 
 const insertdata = async (req, res) => {
   try {
     const table = req.params.tablename;
-    const val3 = req.body;
+    const val3 = { ...req.body };
+
+    if (await tableHasShopId(db, table)) {
+      const shopId = requireShopId(req, res);
+      if (shopId === null) return;
+      val3.shop_id = shopId;
+    }
     
     // Fix for items table: remove sprice as it doesn't exist in the table
     if (table === 'items' && val3.sprice !== undefined) {
@@ -36,7 +43,14 @@ const insertdata = async (req, res) => {
 const insertquotation = async (req, res) => {
   try {
     const table = req.params.tablename;
-    const val3 = req.body;
+    const val3 = { ...req.body };
+
+    if (await tableHasShopId(db, table)) {
+      const shopId = requireShopId(req, res);
+      if (shopId === null) return;
+      val3.shop_id = shopId;
+    }
+
     const keys = Object.keys(val3);
     const values = Object.values(val3);
 
@@ -57,6 +71,12 @@ const savebill = async (req, res) => {
   const connection = await db.getConnection();
   await connection.beginTransaction();
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      await connection.rollback();
+      return;
+    }
+
     const { customer_id, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, payment_mode, setup_date } = req.body;
 
     const discount_amounts = discount_type === 'percentage' ? (subtotal * discount_value) / 100 : discount_value;
@@ -64,11 +84,11 @@ const savebill = async (req, res) => {
 
     const billQuery = `
       INSERT INTO final_bill 
-      (customer_id, inv_date, inv_time, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode, setup_date)
-      VALUES (?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (shop_id, customer_id, inv_date, inv_time, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode, setup_date)
+      VALUES (?, ?, CURDATE(), CURTIME(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const [billResult] = await connection.execute(billQuery, [
-      customer_id, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode, setup_date
+      shopId, customer_id, subtotal, tax, discount_type, discount_value, discount_amount, roundoff, net_total, payment_mode, setup_date
     ]);
     const bill_id = billResult.insertId;
 
@@ -132,8 +152,12 @@ const insertdatabulk = async (req, res) => {
       
       query = `INSERT INTO ${tableName} (quotation_id, customer_id, item_name, quantity, rate, total_amount, status, setup_date, table_cat_id) VALUES ?`;
     } else {
+      const shopId = requireShopId(req, res);
+      if (shopId === null) return;
+
       // Handle order_items and advance_order_items table structure
       values = items.map(item => [
+        shopId,
         item.order_number || item.order_id,
         item.table_number,
         item.item_name,
@@ -142,10 +166,12 @@ const insertdatabulk = async (req, res) => {
         item.total_amount || item.total_price,
         item.status || 'pending',
         item.setup_date,
-        item.table_cat_id || null
+        item.table_cat_id || null,
+        item.catid || item.category_id || null,
+        item.subcatid || item.subcategory_id || null
       ]);
       
-      query = `INSERT INTO ${tableName} (order_id, table_number, item_name, item_group, quantity, total_price, status, setup_date, table_cat_id) VALUES ?`;
+      query = `INSERT INTO ${tableName} (shop_id, order_id, table_number, item_name, item_group, quantity, total_price, status, setup_date, table_cat_id, catid, subcatid) VALUES ?`;
     }
 
      console.log('Bulk Insert Query:', query);
@@ -221,6 +247,9 @@ const insertdatabulkgst = async (req, res) => {
 
 const addNewProduct = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
     const product_id = req.body.product_id;
     const tbl = req.params.tablename;
 
@@ -230,6 +259,7 @@ const addNewProduct = async (req, res) => {
     }
 
     const files = req.files.map(file => [
+      shopId,
       product_id,
       file.filename,
       file.path,
@@ -237,7 +267,7 @@ const addNewProduct = async (req, res) => {
       file.size,
     ]);
 
-    const query = `INSERT INTO ${tbl} (product_id, filename, path, mimetype, size) VALUES ?`;
+    const query = `INSERT INTO ${tbl} (shop_id, product_id, filename, path, mimetype, size) VALUES ?`;
     await db.query(query, [files]);
 
     res.status(200).json({ message: 'Images uploaded and saved to database successfully!' });
