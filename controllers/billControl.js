@@ -382,7 +382,7 @@ const advancesavebill = async (req, res) => {
     } else if (payment_mode === "UPI") {
       ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, null]);
     } else if (payment_mode === "Credit") {
-      ledgerEntries.push([transaction_id, new Date(), "Account Receivable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, null]);
+      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, null]);
     }
 
     // Insert ledger entries

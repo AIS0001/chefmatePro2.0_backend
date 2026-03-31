@@ -204,6 +204,11 @@ ADD COLUMN `shop_id` INT DEFAULT 1 AFTER `id`,
 ADD FOREIGN KEY (`shop_id`) REFERENCES `shops`(`id`) ON DELETE CASCADE,
 ADD KEY `idx_shop_id` (`shop_id`);
 
+ALTER TABLE `units` 
+ADD COLUMN `shop_id` INT DEFAULT 1 AFTER `id`,
+ADD FOREIGN KEY (`shop_id`) REFERENCES `shops`(`id`) ON DELETE CASCADE,
+ADD KEY `idx_shop_id` (`shop_id`);
+
 -- Add shop_id to categories table
 ALTER TABLE `categories` 
 ADD COLUMN `shop_id` INT DEFAULT 1 AFTER `id`,
