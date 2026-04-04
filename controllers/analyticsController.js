@@ -58,21 +58,14 @@ const getAnalyticsDashboard = async (req, res) => {
     const [cancelledBills] = await db.query(`SELECT COUNT(*) AS val FROM final_bill WHERE shop_id = ? AND status = 2`, [shopId]);
     const [entertainmentTotal] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND LOWER(payment_mode) = 'entertainment'`, [shopId]);
     
-    // Active Suppliers count - if supplier_id is not available, use a fallback
-    let totalSuppliers;
-    try {
-      const [suppliersCount] = await db.query(`
-        SELECT COUNT(DISTINCT inv.supplier_id) AS val
-        FROM inventory inv
-        INNER JOIN items i ON i.id = inv.item_id
-        WHERE i.shop_id = ?
-          AND inv.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-          AND inv.supplier_id IS NOT NULL
-      `, [shopId]);
-      totalSuppliers = suppliersCount[0].val || 15; // Fallback to 15 if no suppliers found
-    } catch (err) {
-      totalSuppliers = 15; // Default fallback value
-    }
+    const [suppliersCount] = await db.query(`
+      SELECT COUNT(DISTINCT inv.supplier_id) AS val
+      FROM inventory inv
+      INNER JOIN items i ON i.id = inv.item_id
+      WHERE i.shop_id = ?
+        AND inv.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        AND inv.supplier_id IS NOT NULL
+    `, [shopId]);
 
     res.json({
       success: true,
@@ -82,7 +75,7 @@ const getAnalyticsDashboard = async (req, res) => {
         monthlyPurchases: monthlyPurchases[0].val,
         todayPurchases: todayPurchases[0].val,
         totalOrders: totalOrders[0].val,
-        totalSuppliers: totalSuppliers,
+        totalSuppliers: suppliersCount[0].val,
         cancelledBills: cancelledBills[0].val,
         entertainmentTotal: entertainmentTotal[0].val,
         todayDiscount: todayDiscount[0].val
@@ -164,32 +157,10 @@ const getSuppliersOutstanding = async (req, res) => {
     
     const [results] = await db.query(checkSuppliersQuery, [shopId]);
     
-    // If no data found, return sample data
-    if (results.length === 0) {
-      const sampleData = [
-        { supplier_name: 'Fresh Food Suppliers', total_orders: 45, total_amount: 23000, avg_rating: 4.8 },
-        { supplier_name: 'Beverage Distributors', total_orders: 38, total_amount: 31000, avg_rating: 4.6 },
-        { supplier_name: 'Equipment Suppliers', total_orders: 42, total_amount: 19000, avg_rating: 4.9 },
-        { supplier_name: 'Packaging Co.', total_orders: 35, total_amount: 28000, avg_rating: 4.5 },
-        { supplier_name: 'Cleaning Services', total_orders: 29, total_amount: 15000, avg_rating: 4.7 },
-        { supplier_name: 'Local Farmers', total_orders: 33, total_amount: 22000, avg_rating: 4.8 },
-        { supplier_name: 'Dairy Products', total_orders: 41, total_amount: 26000, avg_rating: 4.6 },
-        { supplier_name: 'Spices & Herbs', total_orders: 37, total_amount: 20000, avg_rating: 4.9 }
-      ];
-      return res.json({ success: true, data: sampleData });
-    }
-    
     res.json({ success: true, data: results });
   } catch (err) {
     console.error("Error fetching suppliers outstanding:", err);
-    // Return sample data on error
-    const sampleData = [
-      { supplier_name: 'Fresh Food Suppliers', total_orders: 45, total_amount: 23000, avg_rating: 4.8 },
-      { supplier_name: 'Beverage Distributors', total_orders: 38, total_amount: 31000, avg_rating: 4.6 },
-      { supplier_name: 'Equipment Suppliers', total_orders: 42, total_amount: 19000, avg_rating: 4.9 },
-      { supplier_name: 'Packaging Co.', total_orders: 35, total_amount: 28000, avg_rating: 4.5 }
-    ];
-    res.json({ success: true, data: sampleData });
+    res.status(500).json({ error: "Failed to fetch suppliers outstanding", details: err.message });
   }
 };
 
@@ -280,35 +251,16 @@ const getTopSellingProducts = async (req, res) => {
     
     const [results] = await db.query(query, [shopId, shopId]);
     
-    // Add colors to results
     const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
     const formattedResults = results.map((product, index) => ({
       ...product,
       color: colors[index] || '#95a5a6'
     }));
-    
-    // If no data, return sample data
-    if (formattedResults.length === 0) {
-      const sampleData = [
-        { name: 'Chicken Burgers', sales: 1560, revenue: 15600, color: '#e74c3c' },
-        { name: 'French Fries', sales: 890, revenue: 8900, color: '#3498db' },
-        { name: 'Soft Drinks', sales: 670, revenue: 6700, color: '#2ecc71' },
-        { name: 'Pizza Slices', sales: 340, revenue: 6800, color: '#f39c12' }
-      ];
-      return res.json({ success: true, data: sampleData });
-    }
-    
+
     res.json({ success: true, data: formattedResults });
   } catch (err) {
     console.error("Error fetching top selling products:", err);
-    // Return sample data on error
-    const sampleData = [
-      { name: 'Chicken Burgers', sales: 1560, revenue: 15600, color: '#e74c3c' },
-      { name: 'French Fries', sales: 890, revenue: 8900, color: '#3498db' },
-      { name: 'Soft Drinks', sales: 670, revenue: 6700, color: '#2ecc71' },
-      { name: 'Pizza Slices', sales: 340, revenue: 6800, color: '#f39c12' }
-    ];
-    res.json({ success: true, data: sampleData });
+    res.status(500).json({ error: "Failed to fetch top selling products", details: err.message });
   }
 };
 
@@ -352,7 +304,6 @@ const getCategoryDistribution = async (req, res) => {
     
     const [results] = await db.query(query, [shopId, shopId, shopId, shopId]);
     
-    // Define colors for categories
     const categoryColors = {
       'Food Items': '#e74c3c',
       'Beverages': '#3498db',
@@ -366,26 +317,10 @@ const getCategoryDistribution = async (req, res) => {
       color: categoryColors[row.category_name] || '#95a5a6'
     }));
     
-    // If no data found, return default categories
-    if (formattedResults.length === 0) {
-      const defaultCategories = [
-        { name: 'Food Items', value: 35, color: '#e74c3c' },
-        { name: 'Beverages', value: 25, color: '#3498db' },
-        { name: 'Other Items', value: 40, color: '#9b59b6' }
-      ];
-      return res.json({ success: true, data: defaultCategories });
-    }
-    
     res.json({ success: true, data: formattedResults });
   } catch (err) {
     console.error("Error fetching category distribution:", err);
-    // Return default data on error
-    const defaultCategories = [
-      { name: 'Food Items', value: 35, color: '#e74c3c' },
-      { name: 'Beverages', value: 25, color: '#3498db' },
-      { name: 'Other Items', value: 40, color: '#9b59b6' }
-    ];
-    res.json({ success: true, data: defaultCategories });
+    res.status(500).json({ error: "Failed to fetch category distribution", details: err.message });
   }
 };
 
@@ -472,37 +407,11 @@ const getPurchaseTrends = async (req, res) => {
     `;
     
     const [results] = await db.query(query, [shopId]);
-    
-    // If no data, return sample data for the chart
-    if (results.length === 0) {
-      const sampleData = [];
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        sampleData.push({
-          day: date.toLocaleDateString('en', { weekday: 'short' }),
-          date: date.toISOString().split('T')[0],
-          purchases: Math.floor(Math.random() * 5000) + 2000
-        });
-      }
-      return res.json({ success: true, data: sampleData });
-    }
-    
+
     res.json({ success: true, data: results });
   } catch (err) {
     console.error("Error fetching purchase trends:", err);
-    // Return sample data on error
-    const sampleData = [];
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      sampleData.push({
-        day: date.toLocaleDateString('en', { weekday: 'short' }),
-        date: date.toISOString().split('T')[0],
-        purchases: Math.floor(Math.random() * 5000) + 2000
-      });
-    }
-    res.json({ success: true, data: sampleData });
+    res.status(500).json({ error: "Failed to fetch purchase trends", details: err.message });
   }
 };
 
@@ -558,13 +467,23 @@ const getFoodAndDrinksSale = async (req, res) => {
       WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(COALESCE(item_group, '')) = 'shisha'
     `, [shopId, today]);
 
+    const totalFoodSale = Number(foodSales[0].total_food_sale || 0);
+    const totalDrinksSale = Number(drinksSales[0].total_drinks_sale || 0);
+    const totalShishaSale = Number(shishaSales[0].total_shisha_sale || 0);
+
     res.json({
       success: true,
       data: {
-        totalFoodSale: foodSales[0].total_food_sale,
-        totalDrinksSale: drinksSales[0].total_drinks_sale,
-        totalShishaSale: shishaSales[0].total_shisha_sale,
-        saleDate: today
+        sales_by_group: {
+          food: { total_sale: totalFoodSale },
+          bar: { total_sale: totalDrinksSale },
+          shisha: { total_sale: totalShishaSale }
+        },
+        saleDate: today,
+        total_all_sales: totalFoodSale + totalDrinksSale + totalShishaSale,
+        totalFoodSale,
+        totalDrinksSale,
+        totalShishaSale
       }
     });
   } catch (err) {
