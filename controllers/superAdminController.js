@@ -589,6 +589,112 @@ exports.toggleShopStatus = async (req, res) => {
   }
 };
 
+/**
+ * Hard delete a shop and all shop-scoped records
+ */
+exports.deleteShop = async (req, res) => {
+  let connection;
+
+  try {
+    const { shop_id } = req.params;
+    const shopId = Number(shop_id);
+
+    if (!Number.isInteger(shopId) || shopId <= 0) {
+      return res.status(400).json({ error: 'Invalid shop_id' });
+    }
+
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [shopRows] = await connection.query('SELECT id, name FROM shops WHERE id = ? LIMIT 1', [shopId]);
+    if (!shopRows || shopRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Collect all base tables containing a shop_id column.
+    const [shopIdColumnTables] = await connection.query(
+      `SELECT DISTINCT c.table_name AS tableName, c.column_name AS columnName
+       FROM information_schema.columns c
+       INNER JOIN information_schema.tables t
+         ON t.table_schema = c.table_schema
+        AND t.table_name = c.table_name
+       WHERE c.table_schema = DATABASE()
+         AND c.column_name = 'shop_id'
+         AND c.table_name <> 'shops'
+         AND t.table_type = 'BASE TABLE'`
+    );
+
+    // Also collect direct foreign-key references to shops.id (covers non-standard FK column names).
+    const [shopFkTables] = await connection.query(
+      `SELECT DISTINCT k.table_name AS tableName, k.column_name AS columnName
+       FROM information_schema.key_column_usage k
+       INNER JOIN information_schema.tables t
+         ON t.table_schema = k.table_schema
+        AND t.table_name = k.table_name
+       WHERE k.table_schema = DATABASE()
+         AND k.referenced_table_name = 'shops'
+         AND k.referenced_column_name = 'id'
+         AND k.table_name <> 'shops'
+         AND t.table_type = 'BASE TABLE'`
+    );
+
+    const tableMap = new Map();
+    [...shopIdColumnTables, ...shopFkTables].forEach((entry) => {
+      const tableName = entry.tableName;
+      const columnName = entry.columnName;
+      if (!tableName || !columnName) {
+        return;
+      }
+      const key = `${tableName}::${columnName}`;
+      tableMap.set(key, { tableName, columnName });
+    });
+
+    const deleteTargets = Array.from(tableMap.values());
+    const deletionSummary = [];
+
+    for (const target of deleteTargets) {
+      const sql = `DELETE FROM \`${target.tableName}\` WHERE \`${target.columnName}\` = ?`;
+      const [deleteResult] = await connection.query(sql, [shopId]);
+      deletionSummary.push({
+        table: target.tableName,
+        column: target.columnName,
+        affectedRows: deleteResult.affectedRows || 0,
+      });
+    }
+
+    const [shopDeleteResult] = await connection.query('DELETE FROM shops WHERE id = ?', [shopId]);
+    if (!shopDeleteResult || shopDeleteResult.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(500).json({ error: 'Failed to delete shop record' });
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `Shop "${shopRows[0].name}" and related records deleted successfully`,
+      data: {
+        shop_id: shopId,
+        cascaded_tables: deletionSummary,
+      },
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (_) {
+        // noop
+      }
+    }
+    res.status(500).json({ error: 'Server error', details: error.message });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
 // =====================================================
 // SHOP USER MANAGEMENT (users table)
 // =====================================================

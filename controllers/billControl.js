@@ -153,15 +153,21 @@ const savebill = async (req, res) => {
     //   ledgerEntries.push([transaction_id, new Date(), "Tax", customer_id, `Bill #${bill_id} - Tax`, tax, 0.00, bill_id]);
     // }
 
-    // Insert into `ledger_entries`
-    const ledgerQuery = `
+    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    const scopedLedgerEntries = ledgerHasShopId
+      ? ledgerEntries.map((entry) => [shopId, ...entry])
+      : ledgerEntries;
+    const ledgerQuery = ledgerHasShopId
+      ? `
+        INSERT INTO ledger_entries (shop_id, transaction_id, date, account_type, account_id, description, debit_amount, credit_amount, reference_id)
+        VALUES ?
+      `
+      : `
         INSERT INTO ledger_entries (transaction_id, date, account_type, account_id, description, debit_amount, credit_amount, reference_id)
         VALUES ?
       `;
 
-    //console.log('Executing Ledger Query:', ledgerQuery);
-
-    await connection.query(ledgerQuery, [ledgerEntries]);
+    await connection.query(ledgerQuery, [scopedLedgerEntries]);
 
     await connection.commit(); // Commit transaction
     await releaseInvoiceSeriesLock(connection, invoiceLockName);
@@ -261,13 +267,21 @@ const kiosksavebill = async (req, res) => {
       ledgerEntries.push([transaction_id, new Date(), "Card", null, `Bill #${invNumber} - Card Payment`, grand_total, 0.00, "NULL"]);
     }
 
-    // Insert into `ledger_entries`
-    const ledgerQuery = `
+    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    const scopedLedgerEntries = ledgerHasShopId
+      ? ledgerEntries.map((entry) => [shopId, ...entry])
+      : ledgerEntries;
+    const ledgerQuery = ledgerHasShopId
+      ? `
+        INSERT INTO ledger_entries (shop_id, transaction_id, date, account_type, account_id, description, debit_amount, credit_amount, reference_id)
+        VALUES ?
+      `
+      : `
         INSERT INTO ledger_entries (transaction_id, date, account_type, account_id, description, debit_amount, credit_amount, reference_id)
         VALUES ?
       `;
 
-    await connection.query(ledgerQuery, [ledgerEntries]);
+    await connection.query(ledgerQuery, [scopedLedgerEntries]);
 
     await connection.commit(); // Commit transaction
     await releaseInvoiceSeriesLock(connection, invoiceLockName);
@@ -382,11 +396,22 @@ const advancesavebill = async (req, res) => {
     } else if (payment_mode === "UPI") {
       ledgerEntries.push([transaction_id, new Date(), "UPI", null, `Bill #${bill_id} - UPI Payment`, grand_total, 0.00, null]);
     } else if (payment_mode === "Credit") {
-      ledgerEntries.push([transaction_id, new Date(), "Account Recievable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, null]);
+      ledgerEntries.push([transaction_id, new Date(), "Account Receivable", customer_id, `Bill #${bill_id} - Credit Sale`, grand_total, 0.00, null]);
     }
 
-    // Insert ledger entries
-    const ledgerQuery = `
+    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    const scopedLedgerEntries = ledgerHasShopId
+      ? ledgerEntries.map((entry) => [shopId, ...entry])
+      : ledgerEntries;
+    const ledgerQuery = ledgerHasShopId
+      ? `
+      INSERT INTO ledger_entries (
+        shop_id, transaction_id, date, account_type, account_id,
+        description, debit_amount, credit_amount, reference_id
+      )
+      VALUES ?
+    `
+      : `
       INSERT INTO ledger_entries (
         transaction_id, date, account_type, account_id,
         description, debit_amount, credit_amount, reference_id
@@ -394,7 +419,7 @@ const advancesavebill = async (req, res) => {
       VALUES ?
     `;
 
-    await connection.query(ledgerQuery, [ledgerEntries]);
+    await connection.query(ledgerQuery, [scopedLedgerEntries]);
 
     await connection.commit();
     res.status(201).json({ success: true, message: "Bill & Ledger saved successfully!", bill_id });
@@ -751,28 +776,28 @@ const saveSupplierPayment = async (req, res) => {
     const paymentDate = new Date();
 
     // Insert ledger entries for the payment
-    // 1. Debit entry for the payment account (e.g., Cash/Bank)
-    // 2. Credit entry for the supplier account (supplier_id)
-    const ledgerHasShopId = await tableHasShopId(db, 'ledger_entries');
+    // 1. Credit cash/bank account (asset decreases)
+    // 2. Debit accounts payable for supplier (liability decreases)
+    const supplierLedgerHasShopId = await tableHasShopId(db, 'Supplier_ledger_entries');
     const paymentVoucherHasShopId = await tableHasShopId(db, 'payment_vouchers');
-    const ledgerEntries = ledgerHasShopId
+    const supplierLedgerEntries = supplierLedgerHasShopId
       ? [
-          [shopId, reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
-          [shopId, reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
+          [shopId, reference_number, paymentDate, account_type, null, "Supplier Payment - Credit", 0.00, amount_paid],
+          [shopId, reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Debit", amount_paid, 0.00]
         ]
       : [
-          [reference_number, paymentDate, account_type, null, "Supplier Payment - Debit", amount_paid, 0.00],
-          [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Credit", 0.00, amount_paid]
+          [reference_number, paymentDate, account_type, null, "Supplier Payment - Credit", 0.00, amount_paid],
+          [reference_number, paymentDate, "Accounts Payable", supplier_id, "Supplier Payment - Debit", amount_paid, 0.00]
         ];
     // const { supplier_id, amount_paid, payment_mode, reference_number,remarks } = req.body;
-    if (ledgerHasShopId) {
+    if (supplierLedgerHasShopId) {
       await connection.query(`
-        INSERT INTO ledger_entries (shop_id, reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-      `, [ledgerEntries]);
+        INSERT INTO Supplier_ledger_entries (shop_id, transaction_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [supplierLedgerEntries]);
     } else {
       await connection.query(`
-        INSERT INTO ledger_entries (reference_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
-      `, [ledgerEntries]);
+        INSERT INTO Supplier_ledger_entries (transaction_id, date, account_type, account_id, description, debit_amount, credit_amount) VALUES ?
+      `, [supplierLedgerEntries]);
     }
 
     // Insert into payment_voucher table
@@ -800,29 +825,95 @@ const saveSupplierPayment = async (req, res) => {
   }
 };
 
+const getSupplierOutstandingBalance = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
+    const supplierId = Number(req.params.supplier_id || 0);
+    if (!supplierId) {
+      return res.status(400).json({ success: false, message: "supplier_id is required" });
+    }
+
+    console.log("[getSupplierOutstandingBalance] API hit", {
+      path: req.originalUrl,
+      supplierId,
+      shopId,
+    });
+
+    const supplierLedgerHasShopId = await tableHasShopId(db, 'Supplier_ledger_entries');
+    const whereClauses = [
+      "sle.account_id = ?",
+    ];
+    const queryParams = [supplierId];
+
+    if (supplierLedgerHasShopId) {
+      whereClauses.unshift("sle.shop_id = ?");
+      queryParams.unshift(shopId);
+    }
+
+    console.log("[getSupplierOutstandingBalance] Query context", {
+      supplierLedgerHasShopId,
+      whereClauses,
+      queryParams,
+    });
+
+    const [result] = await db.execute(
+      `
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN sle.account_type = 'Purchase' THEN (sle.debit_amount - sle.credit_amount)
+            WHEN sle.account_type = 'Accounts Payable' THEN (sle.credit_amount - sle.debit_amount)
+            ELSE (sle.debit_amount - sle.credit_amount)
+          END
+        ), 0) AS outstanding_balance
+        FROM Supplier_ledger_entries sle
+        WHERE ${whereClauses.join(' AND ')}
+      `,
+      queryParams
+    );
+
+    const outstanding_balance = result[0]?.outstanding_balance || 0;
+    console.log("[getSupplierOutstandingBalance] Query result", {
+      supplierId,
+      outstanding_balance,
+      row: result[0],
+    });
+    return res.status(200).json({ success: true, outstanding_balance });
+  } catch (error) {
+    console.error("Error fetching supplier outstanding balance:", error);
+    return res.status(500).json({ success: false, message: "Error fetching supplier balance", error });
+  }
+};
+
 
 const getOutstandingBalance = async (req, res) => {
   try {
     const shopId = requireShopId(req, res);
     if (shopId === null) return;
 
-    const { ac_type, customer_id } = req.params;
-    //console.log("Params received:", req.params);
+    const customerId = Number(req.params.customer_id || req.params.ac_type || 0);
+    if (!customerId) {
+      return res.status(400).json({ success: false, message: "customer_id is required" });
+    }
+
+    const requestedAccountType = req.params.customer_id ? String(req.params.ac_type || '').trim() : '';
+    const accountTypes = requestedAccountType
+      ? [requestedAccountType]
+      : ['Account Recievable', 'Account Receivable'];
+    const placeholders = accountTypes.map(() => '?').join(', ');
 
     const query = `
       SELECT 
-        SUM(le.debit_amount) - SUM(le.credit_amount) AS outstanding_balance
+        COALESCE(SUM(le.debit_amount - le.credit_amount), 0) AS outstanding_balance
       FROM ledger_entries le
-      INNER JOIN customers c ON c.id = le.account_id
-      WHERE le.account_type = ? 
-      AND le.account_id = ?
-      AND c.shop_id = ?;
+      WHERE le.shop_id = ?
+        AND le.account_id = ?
+        AND le.account_type IN (${placeholders});
     `;
-    //console.log(query);
 
-    const [result] = await db.execute(query, [ac_type, customer_id, shopId]);
+    const [result] = await db.execute(query, [shopId, customerId, ...accountTypes]);
     const outstanding_balance = result[0]?.outstanding_balance || 0;
-    //console.log(outstanding_balance);
     res.status(200).json({ success: true, outstanding_balance });
 
   } catch (error) {
@@ -858,4 +949,4 @@ const getCustomerInvoices = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching invoices", error });
   }
 };
-module.exports = { savebill, kiosksavebill,advancesavebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices, saveSupplierPayment };
+module.exports = { savebill, kiosksavebill,advancesavebill, getBills, getBillById, deleteBill, updateBill, savePayment, getOutstandingBalance, getCustomerInvoices, saveSupplierPayment, getSupplierOutstandingBalance };
