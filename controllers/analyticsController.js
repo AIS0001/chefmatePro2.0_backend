@@ -2,6 +2,58 @@ const { validationResult } = require('express-validator');
 const db = require('../config/dbconnection1');
 const { requireShopId } = require('../helpers/shopScope');
 
+const tableColumnsCache = new Map();
+
+const getTableColumns = async (tableName) => {
+  if (tableColumnsCache.has(tableName)) {
+    return tableColumnsCache.get(tableName);
+  }
+
+  const [columns] = await db.query(`
+    SELECT COLUMN_NAME
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+  `, [tableName]);
+
+  const columnSet = new Set(columns.map((column) => column.COLUMN_NAME));
+  tableColumnsCache.set(tableName, columnSet);
+  return columnSet;
+};
+
+const hasTableColumn = async (tableName, columnName) => {
+  const columns = await getTableColumns(tableName);
+  return columns.has(columnName);
+};
+
+const getOrderItemsGroupExpression = async () => {
+  const hasItemGroup = await hasTableColumn('order_items', 'item_group');
+  return hasItemGroup ? "NULLIF(TRIM(oi.item_group), '')" : 'NULL';
+};
+
+const getOrderItemsToFinalBillCondition = async () => {
+  const joinConditions = [];
+
+  if (await hasTableColumn('order_items', 'bill_id')) {
+    joinConditions.push('oi.bill_id = fb.id');
+  }
+
+  if (await hasTableColumn('order_items', 'order_id')) {
+    joinConditions.push('oi.order_id = fb.id');
+  }
+
+  if (await hasTableColumn('order_items', 'invoice_number')) {
+    joinConditions.push("oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))");
+  }
+
+  return joinConditions.length > 0 ? `(${joinConditions.join(' OR ')})` : '1 = 0';
+};
+
+const getOrderItemsShopPredicate = async (alias = 'oi') => {
+  const hasShopId = await hasTableColumn('order_items', 'shop_id');
+  return hasShopId ? `${alias}.shop_id = ?` : null;
+};
+
 // GET ANALYTICS DASHBOARD DATA
 const getAnalyticsDashboard = async (req, res) => {
   try {
@@ -230,26 +282,42 @@ const getTopSellingProducts = async (req, res) => {
     const shopId = requireShopId(req, res);
     if (shopId === null) return;
 
+    const billJoinCondition = await getOrderItemsToFinalBillCondition();
+    const orderItemsShopPredicate = await getOrderItemsShopPredicate('oi');
+
+    const itemNameExpression = "COALESCE(NULLIF(TRIM(oi.item_name), ''), 'Unknown Item')";
+
+    const whereConditions = [];
+    const queryParams = [];
+
+    if (orderItemsShopPredicate) {
+      whereConditions.push(orderItemsShopPredicate);
+      queryParams.push(shopId);
+    }
+
+    whereConditions.push(`EXISTS (
+          SELECT 1
+          FROM final_bill fb
+          WHERE fb.shop_id = ?
+            AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            AND fb.status != 2
+            AND ${billJoinCondition}
+        )`);
+    queryParams.push(shopId);
+
     const query = `
       SELECT 
-        oi.item_name as name,
-        SUM(oi.quantity) as sales,
-        SUM(oi.total_price) as revenue
+        ${itemNameExpression} as name,
+        SUM(COALESCE(oi.quantity, 0)) as sales,
+        ROUND(SUM(COALESCE(oi.total_price, 0)), 2) as revenue
       FROM order_items oi
-      WHERE oi.shop_id = ?
-        AND EXISTS (
-          SELECT 1 FROM final_bill fb 
-          WHERE oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))
-          AND fb.shop_id = ?
-          AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-          AND fb.status != 2
-        )
-      GROUP BY oi.item_name
-      ORDER BY sales DESC
+      WHERE ${whereConditions.join('\n        AND ')}
+      GROUP BY ${itemNameExpression}
+      ORDER BY sales DESC, revenue DESC
       LIMIT 4
     `;
     
-    const [results] = await db.query(query, [shopId, shopId]);
+    const [results] = await db.query(query, queryParams);
     
     const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
     const formattedResults = results.map((product, index) => ({
@@ -270,39 +338,76 @@ const getCategoryDistribution = async (req, res) => {
     const shopId = requireShopId(req, res);
     if (shopId === null) return;
 
+    const orderItemsGroupExpression = await getOrderItemsGroupExpression();
+    const billJoinCondition = await getOrderItemsToFinalBillCondition();
+    const orderItemsShopPredicate = await getOrderItemsShopPredicate('oi');
+    const hasOrderItemsItemName = await hasTableColumn('order_items', 'item_name');
+
+    const itemNameExpression = hasOrderItemsItemName
+      ? "NULLIF(TRIM(oi.item_name), '')"
+      : 'NULL';
+
+    const categorySourceExpression = `COALESCE(${orderItemsGroupExpression}, ${itemNameExpression}, '')`;
+
+    const filteredWhereConditions = [];
+    const totalsWhereConditions = [];
+    const queryParams = [];
+
+    if (orderItemsShopPredicate) {
+      filteredWhereConditions.push(orderItemsShopPredicate);
+      totalsWhereConditions.push(orderItemsShopPredicate);
+      queryParams.push(shopId);
+    }
+
+    filteredWhereConditions.push(`EXISTS (
+            SELECT 1
+            FROM final_bill fb
+            WHERE fb.shop_id = ?
+              AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+              AND fb.status != 2
+              AND ${billJoinCondition}
+          )`);
+    queryParams.push(shopId);
+
+    if (orderItemsShopPredicate) {
+      queryParams.push(shopId);
+    }
+
+    totalsWhereConditions.push(`EXISTS (
+            SELECT 1
+            FROM final_bill fb
+            WHERE fb.shop_id = ?
+              AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+              AND fb.status != 2
+              AND ${billJoinCondition}
+          )`);
+    queryParams.push(shopId);
+
     const query = `
       SELECT 
-        CASE 
-          WHEN LOWER(COALESCE(oi.item_group, '')) = 'food' THEN 'Food Items'
-          WHEN LOWER(COALESCE(oi.item_group, '')) = 'bar' THEN 'Beverages'
-          ELSE 'Other Items'
-        END as category_name,
+        filtered_items.category_name,
         COUNT(*) as count,
-        ROUND((COUNT(*) * 100.0 / (
-          SELECT COUNT(*) FROM order_items oi2 
-          WHERE EXISTS (
-            SELECT 1 FROM final_bill fb2 
-            WHERE oi2.invoice_number = COALESCE(NULLIF(fb2.inv_number, ''), CAST(fb2.id AS CHAR))
-            AND oi2.shop_id = ?
-            AND fb2.shop_id = ?
-            AND fb2.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-            AND fb2.status != 2
-          )
-        )), 1) as percentage
-      FROM order_items oi
-      WHERE EXISTS (
-        SELECT 1 FROM final_bill fb 
-        WHERE oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))
-        AND oi.shop_id = ?
-        AND fb.shop_id = ?
-        AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        AND fb.status != 2
-      )
-      GROUP BY category_name
+        ROUND((COUNT(*) * 100.0 / NULLIF(totals.total_count, 0)), 1) as percentage
+      FROM (
+        SELECT
+          CASE
+            WHEN LOWER(${categorySourceExpression}) REGEXP 'bar|beverage|drink|liquor|cocktail|mocktail|juice|coffee|tea|smoothie' THEN 'Beverages'
+            WHEN LOWER(${categorySourceExpression}) REGEXP 'food|starter|main|dessert|meal|snack|kitchen|burger|pizza|rice|pasta|bbq' THEN 'Food Items'
+            ELSE 'Other Items'
+          END as category_name
+        FROM order_items oi
+        WHERE ${filteredWhereConditions.join('\n          AND ')}
+      ) filtered_items
+      CROSS JOIN (
+        SELECT COUNT(*) as total_count
+        FROM order_items oi
+        WHERE ${totalsWhereConditions.join('\n          AND ')}
+      ) totals
+      GROUP BY filtered_items.category_name, totals.total_count
       ORDER BY count DESC
     `;
     
-    const [results] = await db.query(query, [shopId, shopId, shopId, shopId]);
+    const [results] = await db.query(query, queryParams);
     
     const categoryColors = {
       'Food Items': '#e74c3c',
