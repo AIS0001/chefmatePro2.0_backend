@@ -9,6 +9,7 @@ const savebillController = require("../controllers/billControl");
 const deletecontroller = require("../controllers/deletecontrol");
 const viewcontroller = require("../controllers/viewcontrol");
 const updatecontroller = require("../controllers/updatecontrol");
+const monitoringSupportController = require('../controllers/monitoringSupportController');
 const { db } = require('../config/dbconnection');
 // const featureController = require("../controllers/featureController"); // Disabled
 const path = require('path');
@@ -83,6 +84,12 @@ router.get('/shop-name', auth.isAuthorize, async (req, res) => {
     res.json({ success: false, shop_name: '' });
   }
 });
+
+router.get('/support/tickets', auth.isAuthorize, monitoringSupportController.getShopSupportTickets);
+router.get('/support/tickets/stats', auth.isAuthorize, monitoringSupportController.getShopSupportTicketStats);
+router.get('/support/tickets/:id', auth.isAuthorize, monitoringSupportController.getShopSupportTicketDetail);
+router.post('/support/tickets', auth.isAuthorize, monitoringSupportController.createShopSupportTicket);
+router.post('/support/tickets/:ticket_id/comments', auth.isAuthorize, monitoringSupportController.addShopTicketComment);
 
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/users-with-uuid', auth.isAuthorize, usercontroller.getUsersWithUuid);

@@ -4,6 +4,372 @@
  */
 
 const { db } = require('../config/dbconnection');
+const { requireShopId } = require('../helpers/shopScope');
+
+const BASE_TICKET_COLUMNS = [
+  'id',
+  'shop_id',
+  'ticket_number',
+  'user_id',
+  'assigned_to',
+  'category',
+  'subject',
+  'description',
+  'priority',
+  'status',
+  'error_log_id',
+  'notes',
+  'resolution',
+  'created_by',
+  'created_at',
+  'updated_at',
+  'resolved_at'
+];
+
+const UNRESOLVED_STATUSES = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'ON_HOLD'];
+let supportSchemaCache = null;
+
+const buildTicketColumnSelection = async (connection) => {
+  const schema = await getSupportSchema(connection);
+  const columns = BASE_TICKET_COLUMNS.map((column) => `st.${column}`);
+
+  columns.push(
+    schema.ticketColumns.has('progress_stage') ? 'st.progress_stage' : 'NULL AS progress_stage',
+    schema.ticketColumns.has('stage_updated_at') ? 'st.stage_updated_at' : 'NULL AS stage_updated_at',
+    schema.ticketColumns.has('closed_at') ? 'st.closed_at' : 'NULL AS closed_at',
+    schema.ticketColumns.has('resolved_by') ? 'st.resolved_by' : 'NULL AS resolved_by',
+    schema.ticketColumns.has('closed_by') ? 'st.closed_by' : 'NULL AS closed_by'
+  );
+
+  return columns.join(', ');
+};
+
+const getSupportSchema = async (connection) => {
+  if (supportSchemaCache) {
+    return supportSchemaCache;
+  }
+
+  const [rows] = await connection.query(
+    `SELECT TABLE_NAME, COLUMN_NAME
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME IN ('support_tickets', 'support_ticket_comments')`
+  );
+
+  supportSchemaCache = rows.reduce(
+    (accumulator, row) => {
+      if (row.TABLE_NAME === 'support_tickets') {
+        accumulator.ticketColumns.add(row.COLUMN_NAME);
+      }
+      if (row.TABLE_NAME === 'support_ticket_comments') {
+        accumulator.commentColumns.add(row.COLUMN_NAME);
+      }
+      return accumulator;
+    },
+    {
+      ticketColumns: new Set(),
+      commentColumns: new Set()
+    }
+  );
+
+  return supportSchemaCache;
+};
+
+const normalizeStatusFilter = (status) => {
+  if (!status) {
+    return null;
+  }
+
+  const normalized = String(status).trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === 'NOT_RESOLVED' || normalized === 'UNRESOLVED') {
+    return [...UNRESOLVED_STATUSES];
+  }
+
+  if (normalized === 'RESOLVED_OR_CLOSED') {
+    return ['RESOLVED', 'CLOSED'];
+  }
+
+  return [normalized];
+};
+
+const applyStatusFilter = (queryParts, params, status) => {
+  const statuses = normalizeStatusFilter(status);
+  if (!statuses || statuses.length === 0) {
+    return;
+  }
+
+  if (statuses.length === 1) {
+    queryParts.push('st.status = ?');
+    params.push(statuses[0]);
+    return;
+  }
+
+  queryParts.push(`st.status IN (${statuses.map(() => '?').join(', ')})`);
+  params.push(...statuses);
+};
+
+const buildSupportTicketBaseQuery = async (connection) => {
+  const ticketColumns = await buildTicketColumnSelection(connection);
+
+  return `
+    SELECT ${ticketColumns},
+      s.name AS shop_name,
+      requester.name AS requester_name,
+      COALESCE(
+        CONCAT(COALESCE(assignee.first_name, ''), ' ', COALESCE(assignee.last_name, '')),
+        assignee.username
+      ) AS assigned_to_name
+    FROM support_tickets st
+    LEFT JOIN shops s ON st.shop_id = s.id
+    LEFT JOIN users requester ON st.user_id = requester.id
+    LEFT JOIN super_admin_users assignee ON st.assigned_to = assignee.id
+  `;
+};
+
+const buildSupportCommentsQuery = (includeInternalComments) => {
+  let query = `
+    SELECT stc.*, COALESCE(
+      u.name,
+      CONCAT(COALESCE(sau.first_name, ''), ' ', COALESCE(sau.last_name, '')),
+      sau.username,
+      'Support'
+    ) AS user_name
+    FROM support_ticket_comments stc
+    LEFT JOIN users u ON stc.user_id = u.id
+    LEFT JOIN super_admin_users sau ON stc.user_id = sau.id
+    WHERE stc.ticket_id = ?
+  `;
+
+  if (!includeInternalComments) {
+    query += ' AND COALESCE(stc.is_internal, 0) = 0';
+  }
+
+  query += ' ORDER BY stc.created_at ASC';
+  return query;
+};
+
+const buildSupportTicketWhereClause = ({
+  shopId,
+  category,
+  status,
+  priority,
+  assignedTo,
+  search,
+  ticketId
+}) => {
+  const conditions = [];
+  const params = [];
+
+  if (ticketId) {
+    conditions.push('st.id = ?');
+    params.push(ticketId);
+  }
+
+  if (shopId) {
+    conditions.push('st.shop_id = ?');
+    params.push(shopId);
+  }
+
+  if (category) {
+    conditions.push('st.category = ?');
+    params.push(category);
+  }
+
+  applyStatusFilter(conditions, params, status);
+
+  if (priority) {
+    conditions.push('st.priority = ?');
+    params.push(priority);
+  }
+
+  if (assignedTo) {
+    conditions.push('st.assigned_to = ?');
+    params.push(assignedTo);
+  }
+
+  if (search) {
+    const searchTerm = `%${search}%`;
+    conditions.push('(st.subject LIKE ? OR st.ticket_number LIKE ? OR st.description LIKE ?)');
+    params.push(searchTerm, searchTerm, searchTerm);
+  }
+
+  return {
+    clause: conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '',
+    params
+  };
+};
+
+const fetchSupportTickets = async ({
+  connection,
+  filters,
+  page,
+  limit
+}) => {
+  const baseQuery = await buildSupportTicketBaseQuery(connection);
+  const { clause, params } = buildSupportTicketWhereClause(filters);
+
+  const countSql = `SELECT COUNT(*) AS total FROM support_tickets st${clause}`;
+  const [countResults] = await connection.query(countSql, params);
+  const total = countResults[0]?.total || 0;
+
+  const offset = (Number(page) - 1) * Number(limit);
+  const finalQuery = `${baseQuery}${clause} ORDER BY st.created_at DESC LIMIT ? OFFSET ?`;
+  const [results] = await connection.query(finalQuery, [...params, Number(limit), offset]);
+
+  return {
+    results,
+    total,
+    page: Number(page),
+    limit: Number(limit)
+  };
+};
+
+const fetchSupportTicketDetail = async ({
+  connection,
+  ticketId,
+  shopId,
+  includeInternalComments
+}) => {
+  const baseQuery = await buildSupportTicketBaseQuery(connection);
+  const { clause, params } = buildSupportTicketWhereClause({ ticketId, shopId });
+  const [ticketResults] = await connection.query(`${baseQuery}${clause} LIMIT 1`, params);
+
+  if (!ticketResults || ticketResults.length === 0) {
+    return null;
+  }
+
+  const commentsQuery = buildSupportCommentsQuery(includeInternalComments);
+  const [comments] = await connection.query(commentsQuery, [ticketId]);
+
+  return {
+    ticket: ticketResults[0],
+    comments: comments || []
+  };
+};
+
+const insertSupportTicket = async ({
+  connection,
+  payload,
+  userId,
+  createdBy,
+  progressStage
+}) => {
+  const schema = await getSupportSchema(connection);
+  const columns = [
+    'shop_id',
+    'user_id',
+    'ticket_number',
+    'category',
+    'subject',
+    'description',
+    'priority',
+    'error_log_id',
+    'created_by'
+  ];
+  const values = [
+    payload.shop_id,
+    userId,
+    payload.ticket_number,
+    payload.category,
+    payload.subject,
+    payload.description,
+    payload.priority || 'MEDIUM',
+    payload.error_log_id || null,
+    createdBy
+  ];
+
+  if (schema.ticketColumns.has('progress_stage')) {
+    columns.push('progress_stage');
+    values.push(progressStage || 'New');
+  }
+
+  if (schema.ticketColumns.has('stage_updated_at')) {
+    columns.push('stage_updated_at');
+    values.push(new Date());
+  }
+
+  const placeholders = columns.map(() => '?').join(', ');
+  const query = `INSERT INTO support_tickets (${columns.join(', ')}) VALUES (${placeholders})`;
+  return connection.query(query, values);
+};
+
+const updateSupportTicketRecord = async ({ connection, ticketId, updates, actorId }) => {
+  const schema = await getSupportSchema(connection);
+  const fields = [];
+  const params = [];
+
+  if (updates.status) {
+    const normalizedStatus = String(updates.status).trim().toUpperCase();
+    fields.push('status = ?');
+    params.push(normalizedStatus);
+
+    if (normalizedStatus === 'RESOLVED') {
+      fields.push('resolved_at = NOW()');
+      if (schema.ticketColumns.has('resolved_by')) {
+        fields.push('resolved_by = ?');
+        params.push(actorId || null);
+      }
+    }
+
+    if (normalizedStatus === 'CLOSED') {
+      fields.push('resolved_at = COALESCE(resolved_at, NOW())');
+      if (schema.ticketColumns.has('closed_at')) {
+        fields.push('closed_at = NOW()');
+      }
+      if (schema.ticketColumns.has('closed_by')) {
+        fields.push('closed_by = ?');
+        params.push(actorId || null);
+      }
+    }
+  }
+
+  if (updates.priority) {
+    fields.push('priority = ?');
+    params.push(updates.priority);
+  }
+
+  if (updates.assigned_to !== undefined) {
+    fields.push('assigned_to = ?');
+    params.push(updates.assigned_to || null);
+  }
+
+  if (updates.notes !== undefined) {
+    fields.push('notes = ?');
+    params.push(updates.notes || null);
+  }
+
+  if (updates.resolution !== undefined) {
+    fields.push('resolution = ?');
+    params.push(updates.resolution || null);
+  }
+
+  if (schema.ticketColumns.has('progress_stage') && updates.progress_stage !== undefined) {
+    fields.push('progress_stage = ?');
+    params.push(updates.progress_stage || null);
+  }
+
+  if (schema.ticketColumns.has('stage_updated_at') && updates.progress_stage !== undefined) {
+    fields.push('stage_updated_at = NOW()');
+  }
+
+  if (fields.length === 0) {
+    return { affectedRows: 0, skipped: true };
+  }
+
+  fields.push('updated_at = NOW()');
+  params.push(ticketId);
+
+  const [result] = await connection.query(
+    `UPDATE support_tickets SET ${fields.join(', ')} WHERE id = ?`,
+    params
+  );
+
+  return result;
+};
 
 // =====================================================
 // ERROR LOGS CONTROLLER
@@ -269,102 +635,20 @@ exports.getSupportTickets = async (req, res) => {
   let connection;
   try {
     connection = await db.getConnection();
-
-    const {
-      shop_id,
-      category,
-      status = 'OPEN',
-      priority,
-      assigned_to,
-      page = 1,
-      limit = 20,
-      search
-    } = req.query;
-
-    let query = `
-      SELECT st.*, s.name as shop_name, u1.name as created_by_name, CONCAT(COALESCE(u2.first_name, ''), ' ', COALESCE(u2.last_name, '')) as assigned_to_name
-      FROM support_tickets st
-      LEFT JOIN shops s ON st.shop_id = s.id
-      LEFT JOIN users u1 ON st.user_id = u1.id
-      LEFT JOIN super_admin_users u2 ON st.assigned_to = u2.id
-      WHERE 1=1
-    `;
-    const params = [];
-
-    if (shop_id) {
-      query += ' AND st.shop_id = ?';
-      params.push(shop_id);
-    }
-
-    if (category) {
-      query += ' AND st.category = ?';
-      params.push(category);
-    }
-
-    if (status) {
-      query += ' AND st.status = ?';
-      params.push(status);
-    }
-
-    if (priority) {
-      query += ' AND st.priority = ?';
-      params.push(priority);
-    }
-
-    if (assigned_to) {
-      query += ' AND st.assigned_to = ?';
-      params.push(assigned_to);
-    }
-
-    if (search) {
-      query += ' AND (st.subject LIKE ? OR st.ticket_number LIKE ? OR st.description LIKE ?)';
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
-    }
-
-    // Get total count
-    const countQuery = query.replace(
-      /SELECT st\.\*, s\.name.*FROM support_tickets/,
-      'SELECT COUNT(*) as total FROM support_tickets'
-    ).split('LEFT JOIN')[0] + ' WHERE 1=1';
-
-    let countParams = [];
-    if (shop_id) {
-      countParams.push(shop_id);
-    }
-    if (category) {
-      countParams.push(category);
-    }
-    if (status) {
-      countParams.push(status);
-    }
-    if (priority) {
-      countParams.push(priority);
-    }
-    if (assigned_to) {
-      countParams.push(assigned_to);
-    }
-    if (search) {
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    let countSql = 'SELECT COUNT(*) as total FROM support_tickets WHERE 1=1';
-    if (shop_id) countSql += ' AND shop_id = ?';
-    if (category) countSql += ' AND category = ?';
-    if (status) countSql += ' AND status = ?';
-    if (priority) countSql += ' AND priority = ?';
-    if (assigned_to) countSql += ' AND assigned_to = ?';
-    if (search) countSql += ' AND (subject LIKE ? OR ticket_number LIKE ? OR description LIKE ?)';
-
-    const [countResults] = await connection.query(countSql, params);
-    const total = countResults[0].total;
-
-    // Get paginated results
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    const finalQuery = query + ' ORDER BY st.created_at DESC LIMIT ? OFFSET ?';
-    const finalParams = [...params, parseInt(limit), offset];
-
-    const [results] = await connection.query(finalQuery, finalParams);
+    const { shop_id, category, status = 'OPEN', priority, assigned_to, page = 1, limit = 20, search } = req.query;
+    const { results, total } = await fetchSupportTickets({
+      connection,
+      filters: {
+        shopId: shop_id,
+        category,
+        status,
+        priority,
+        assignedTo: assigned_to,
+        search
+      },
+      page,
+      limit
+    });
 
     res.status(200).json({
       success: true,
@@ -398,41 +682,24 @@ exports.getSupportTicketDetail = async (req, res) => {
     connection = await db.getConnection();
     const { id } = req.params;
 
-    // Get ticket details
-    const ticketQuery = `
-      SELECT st.*, s.name as shop_name, u1.name as created_by_name, CONCAT(COALESCE(u2.first_name, ''), ' ', COALESCE(u2.last_name, '')) as assigned_to_name
-      FROM support_tickets st
-      LEFT JOIN shops s ON st.shop_id = s.id
-      LEFT JOIN users u1 ON st.user_id = u1.id
-      LEFT JOIN super_admin_users u2 ON st.assigned_to = u2.id
-      WHERE st.id = ?
-    `;
+    const detail = await fetchSupportTicketDetail({
+      connection,
+      ticketId: id,
+      shopId: null,
+      includeInternalComments: true
+    });
 
-    const [ticketResults] = await connection.query(ticketQuery, [id]);
-
-    if (!ticketResults || ticketResults.length === 0) {
+    if (!detail) {
       return res.status(404).json({
         success: false,
         error: 'Ticket not found'
       });
     }
 
-    // Get comments
-    const commentsQuery = `
-      SELECT stc.*, COALESCE(u.name, CONCAT(COALESCE(sau.first_name, ''), ' ', COALESCE(sau.last_name, '')), sau.username, 'Admin') as user_name
-      FROM support_ticket_comments stc
-      LEFT JOIN users u ON stc.user_id = u.id
-      LEFT JOIN super_admin_users sau ON stc.user_id = sau.id
-      WHERE stc.ticket_id = ?
-      ORDER BY stc.created_at ASC
-    `;
-
-    const [comments] = await connection.query(commentsQuery, [id]);
-
     res.status(200).json({
       success: true,
-      ticket: ticketResults[0],
-      comments: comments || []
+      ticket: detail.ticket,
+      comments: detail.comments
     });
 
   } catch (error) {
@@ -462,7 +729,8 @@ exports.createSupportTicket = async (req, res) => {
       description,
       priority = 'MEDIUM',
       error_log_id,
-      created_by
+      created_by,
+      progress_stage
     } = req.body;
     const creatorId = created_by || req.user?.id || null;
 
@@ -479,19 +747,21 @@ exports.createSupportTicket = async (req, res) => {
     const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     const ticketNumber = `TICKET-${shop_id}-${dateStr}-${randomNum}`;
 
-    const query = `
-      INSERT INTO support_tickets (
-        shop_id, user_id, ticket_number, category, subject, description,
-        priority, error_log_id, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      shop_id, user_id, ticketNumber, category, subject, description,
-      priority, error_log_id, creatorId
-    ];
-
-    const [result] = await connection.query(query, params);
+    const [result] = await insertSupportTicket({
+      connection,
+      payload: {
+        shop_id,
+        ticket_number: ticketNumber,
+        category,
+        subject,
+        description,
+        priority,
+        error_log_id
+      },
+      userId: user_id || null,
+      createdBy: creatorId,
+      progressStage: progress_stage
+    });
 
     res.status(201).json({
       success: true,
@@ -520,52 +790,19 @@ exports.updateSupportTicket = async (req, res) => {
   try {
     connection = await db.getConnection();
     const { id } = req.params;
-    const { status, priority, assigned_to, notes, resolution } = req.body;
+    const result = await updateSupportTicketRecord({
+      connection,
+      ticketId: id,
+      updates: req.body,
+      actorId: req.user?.id || null
+    });
 
-    let query = 'UPDATE support_tickets SET ';
-    const params = [];
-    const updateFields = [];
-
-    if (status) {
-      updateFields.push('status = ?');
-      params.push(status);
-      if (status === 'RESOLVED' || status === 'CLOSED') {
-        updateFields.push('resolved_at = NOW()');
-      }
-    }
-
-    if (priority) {
-      updateFields.push('priority = ?');
-      params.push(priority);
-    }
-
-    if (assigned_to !== undefined) {
-      updateFields.push('assigned_to = ?');
-      params.push(assigned_to);
-    }
-
-    if (notes) {
-      updateFields.push('notes = ?');
-      params.push(notes);
-    }
-
-    if (resolution) {
-      updateFields.push('resolution = ?');
-      params.push(resolution);
-    }
-
-    if (updateFields.length === 0) {
+    if (result.skipped) {
       return res.status(400).json({
         success: false,
         error: 'No fields to update'
       });
     }
-
-    updateFields.push('updated_at = NOW()');
-    params.push(id);
-    query += updateFields.join(', ') + ' WHERE id = ?';
-
-    const [result] = await connection.query(query, params);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -700,6 +937,237 @@ exports.getMonitoringStats = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get statistics',
+      details: error.message
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+exports.getShopSupportTickets = async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
+    const { category, status = '', priority, page = 1, limit = 20, search } = req.query;
+    const { results, total } = await fetchSupportTickets({
+      connection,
+      filters: {
+        shopId,
+        category,
+        status,
+        priority,
+        search
+      },
+      page,
+      limit
+    });
+
+    res.status(200).json({
+      success: true,
+      data: results,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching shop support tickets:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch support tickets',
+      details: error.message
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+exports.getShopSupportTicketDetail = async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
+    const detail = await fetchSupportTicketDetail({
+      connection,
+      ticketId: req.params.id,
+      shopId,
+      includeInternalComments: false
+    });
+
+    if (!detail) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      ticket: detail.ticket,
+      comments: detail.comments
+    });
+  } catch (error) {
+    console.error('Error fetching shop support ticket detail:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch support ticket',
+      details: error.message
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+exports.createShopSupportTicket = async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
+    const { category, subject, description, priority = 'MEDIUM', error_log_id } = req.body;
+    if (!category || !subject || !description) {
+      return res.status(400).json({
+        success: false,
+        error: 'category, subject, and description are required'
+      });
+    }
+
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+    const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const ticketNumber = `TICKET-${shopId}-${dateStr}-${randomNum}`;
+
+    const [result] = await insertSupportTicket({
+      connection,
+      payload: {
+        shop_id: shopId,
+        ticket_number: ticketNumber,
+        category,
+        subject,
+        description,
+        priority,
+        error_log_id
+      },
+      userId: req.user?.id || null,
+      createdBy: null,
+      progressStage: 'New'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Support ticket created successfully',
+      ticket_id: result.insertId,
+      ticket_number: ticketNumber
+    });
+  } catch (error) {
+    console.error('Error creating shop support ticket:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create support ticket',
+      details: error.message
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+exports.addShopTicketComment = async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
+    const { ticket_id } = req.params;
+    const { comment, attachment_url } = req.body;
+
+    if (!comment) {
+      return res.status(400).json({
+        success: false,
+        error: 'comment is required'
+      });
+    }
+
+    const [ticketRows] = await connection.query(
+      'SELECT id FROM support_tickets WHERE id = ? AND shop_id = ? LIMIT 1',
+      [ticket_id, shopId]
+    );
+
+    if (!ticketRows || ticketRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ticket not found'
+      });
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO support_ticket_comments (ticket_id, user_id, comment, is_internal, attachment_url)
+       VALUES (?, ?, ?, 0, ?)`,
+      [ticket_id, req.user?.id || null, comment, attachment_url || null]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Comment added successfully',
+      comment_id: result.insertId
+    });
+  } catch (error) {
+    console.error('Error adding shop ticket comment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add comment',
+      details: error.message
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+exports.getShopSupportTicketStats = async (req, res) => {
+  let connection;
+  try {
+    connection = await db.getConnection();
+    const shopId = requireShopId(req, res);
+    if (shopId === null) {
+      return;
+    }
+
+    const [statsRows] = await connection.query(
+      `SELECT
+        COUNT(*) AS total_tickets,
+        SUM(CASE WHEN status IN ('OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'ON_HOLD') THEN 1 ELSE 0 END) AS unresolved_tickets,
+        SUM(CASE WHEN status = 'RESOLVED' THEN 1 ELSE 0 END) AS resolved_tickets,
+        SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) AS closed_tickets
+       FROM support_tickets
+       WHERE shop_id = ?`,
+      [shopId]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: statsRows[0] || {}
+    });
+  } catch (error) {
+    console.error('Error fetching shop support ticket stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch support ticket stats',
       details: error.message
     });
   } finally {
