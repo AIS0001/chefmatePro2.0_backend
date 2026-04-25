@@ -33,20 +33,56 @@ const getOrderItemsGroupExpression = async () => {
 
 const getOrderItemsToFinalBillCondition = async () => {
   const joinConditions = [];
+  const hasFinalBillId = await hasTableColumn('final_bill', 'id');
+  const hasFinalBillInvNumber = await hasTableColumn('final_bill', 'inv_number');
+  const hasFinalBillInvoiceNumber = await hasTableColumn('final_bill', 'invoice_number');
 
-  if (await hasTableColumn('order_items', 'bill_id')) {
+  if (hasFinalBillId && await hasTableColumn('order_items', 'bill_id')) {
     joinConditions.push('oi.bill_id = fb.id');
   }
 
-  if (await hasTableColumn('order_items', 'order_id')) {
+  if (hasFinalBillId && await hasTableColumn('order_items', 'order_id')) {
     joinConditions.push('oi.order_id = fb.id');
   }
 
   if (await hasTableColumn('order_items', 'invoice_number')) {
-    joinConditions.push("oi.invoice_number = COALESCE(NULLIF(fb.inv_number, ''), CAST(fb.id AS CHAR))");
+    if (hasFinalBillInvNumber) {
+      joinConditions.push("oi.invoice_number = NULLIF(fb.inv_number, '')");
+    } else if (hasFinalBillInvoiceNumber) {
+      joinConditions.push("oi.invoice_number = NULLIF(fb.invoice_number, '')");
+    }
+
+    if (hasFinalBillId) {
+      joinConditions.push('oi.invoice_number = CAST(fb.id AS CHAR)');
+    }
   }
 
   return joinConditions.length > 0 ? `(${joinConditions.join(' OR ')})` : '1 = 0';
+};
+
+const getOrderItemsRevenueExpression = async () => {
+  if (await hasTableColumn('order_items', 'total_price')) {
+    return 'COALESCE(oi.total_price, 0)';
+  }
+
+  if (await hasTableColumn('order_items', 'amount')) {
+    return 'COALESCE(oi.amount, 0)';
+  }
+
+  const hasPrice = await hasTableColumn('order_items', 'price');
+  const hasQuantity = await hasTableColumn('order_items', 'quantity');
+  if (hasPrice && hasQuantity) {
+    return '(COALESCE(oi.price, 0) * COALESCE(oi.quantity, 0))';
+  }
+
+  return '0';
+};
+
+const getOrderItemsQuantityExpression = async () => {
+  if (await hasTableColumn('order_items', 'quantity')) {
+    return 'COALESCE(oi.quantity, 0)';
+  }
+  return '0';
 };
 
 const getOrderItemsShopPredicate = async (alias = 'oi') => {
@@ -284,6 +320,8 @@ const getTopSellingProducts = async (req, res) => {
 
     const billJoinCondition = await getOrderItemsToFinalBillCondition();
     const orderItemsShopPredicate = await getOrderItemsShopPredicate('oi');
+    const quantityExpression = await getOrderItemsQuantityExpression();
+    const revenueExpression = await getOrderItemsRevenueExpression();
 
     const itemNameExpression = "COALESCE(NULLIF(TRIM(oi.item_name), ''), 'Unknown Item')";
 
@@ -308,8 +346,8 @@ const getTopSellingProducts = async (req, res) => {
     const query = `
       SELECT 
         ${itemNameExpression} as name,
-        SUM(COALESCE(oi.quantity, 0)) as sales,
-        ROUND(SUM(COALESCE(oi.total_price, 0)), 2) as revenue
+        SUM(${quantityExpression}) as sales,
+        ROUND(SUM(${revenueExpression}), 2) as revenue
       FROM order_items oi
       WHERE ${whereConditions.join('\n        AND ')}
       GROUP BY ${itemNameExpression}

@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
 const path = require("path");
 const http = require("http");
 const fileUpload = require("express-fileupload");
@@ -35,14 +34,22 @@ require("./config/dbconnection");
 
 const app = express();
 
-const isAllowedOrigin = (origin) => {
-  return typeof origin === "string" && origin.length > 0;
-};
+const allowedOrigins = [
+ 
+  "https://chefmatepro.livecloudnet.com",
+  "https://www.chefmatepro.livecloudnet.com",
+  "http://localhost:3000",
+  
+  ...(process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+];
 
 const applyCorsHeaders = (req, res) => {
   const origin = req.headers.origin;
 
-  if (isAllowedOrigin(origin)) {
+  if (allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Vary", "Origin");
   }
@@ -51,20 +58,8 @@ const applyCorsHeaders = (req, res) => {
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.header(
     "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    "Content-Type, Authorization, X-Requested-With"
   );
-};
-
-const corsOptionsDelegate = (req, callback) => {
-  const origin = req.headers.origin;
-
-  callback(null, {
-    origin: isAllowedOrigin(origin),
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"],
-    optionsSuccessStatus: 204
-  });
 };
 
 /* ==================================
@@ -72,10 +67,14 @@ const corsOptionsDelegate = (req, callback) => {
 ================================== */
 app.use((req, res, next) => {
   applyCorsHeaders(req, res);
+
+  // Reply to CORS preflight before other middleware can interfere.
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
   next();
 });
-app.use(cors(corsOptionsDelegate));
-app.options("*", cors(corsOptionsDelegate));
 
 /* ==================================
    MIDDLEWARES
