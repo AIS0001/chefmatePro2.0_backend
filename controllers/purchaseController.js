@@ -20,8 +20,9 @@ class PurchaseController {
 
       const { purchaseData, items } = req.body;
       const userId = req.user?.id || null;
+      const shopId = req.user?.shopId || req.query?.shop_id || null;
 
-      const result = await purchaseService.createPurchase(purchaseData, items, userId);
+      const result = await purchaseService.createPurchase(purchaseData, items, userId, shopId);
 
       res.status(201).json({
         success: true,

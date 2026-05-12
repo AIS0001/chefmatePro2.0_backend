@@ -68,7 +68,7 @@ class StockService {
    * @param {number} referenceId - ID from reference table
    * @param {string} notes - Additional notes
    */
-  async addStock(productId, unitId, quantity, userId, referenceType = 'MANUAL', referenceId = null, notes = '') {
+  async addStock(productId, unitId, quantity, userId, referenceType = 'MANUAL', referenceId = null, notes = '', shopId = null) {
     try {
       const connection = await db.getConnection();
       
@@ -110,8 +110,8 @@ class StockService {
         // Record transaction
         await connection.query(
           `INSERT INTO stock_transactions 
-           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml, shop_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             productId,
             'ADD',
@@ -121,7 +121,8 @@ class StockService {
             referenceId,
             userId,
             notes,
-            totalMlAdded
+            totalMlAdded,
+            shopId
           ]
         );
 
@@ -216,7 +217,7 @@ class StockService {
    * Intelligently removes from base units when serving units are requested
    * For liquor: If customer orders 30ml peg, it deducts from full bottle stock
    */
-  async removeStock(productId, unitId, quantity, userId, referenceType = 'SALE', referenceId = null, notes = '') {
+  async removeStock(productId, unitId, quantity, userId, referenceType = 'SALE', referenceId = null, notes = '', shopId = null) {
     try {
       const connection = await db.getConnection();
       
@@ -257,8 +258,9 @@ class StockService {
         // If requested unit is NOT the base unit and has ML capacity, deduct from base unit instead
         if (!requestedUnit.is_base_unit && baseUnit && quantityInMl) {
           deductFromUnitId = baseUnit.id;
-          // Convert ML quantity to base unit quantity
-          quantityToDeduct = Math.ceil(quantityInMl / baseUnit.ml_capacity); // Ceiling to account for partial bottles
+          // Convert ML quantity to proportional base unit quantity.
+          // Example: 2 x 30ml from 750ml bottle = 0.08 bottle deduction.
+          quantityToDeduct = quantityInMl / baseUnit.ml_capacity;
           actualQuantityInMl = quantityInMl;
         }
 
@@ -279,8 +281,8 @@ class StockService {
         // Record transaction with original requested unit and quantity
         await connection.query(
           `INSERT INTO stock_transactions 
-           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (product_id, transaction_type, unit_id, quantity, reference_type, reference_id, user_id, notes, quantity_in_ml, shop_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             productId,
             'REMOVE',
@@ -290,7 +292,8 @@ class StockService {
             referenceId,
             userId,
             notes,
-            actualQuantityInMl
+            actualQuantityInMl,
+            shopId
           ]
         );
 
@@ -475,7 +478,7 @@ class StockService {
    * Smart removal for liquor - can sell in different serving sizes
    * E.g., Remove from 1 bottle when selling 30ML peg
    */
-  async removeStockWithVariants(productId, variantId, quantity, userId, referenceId = null, notes = '') {
+  async removeStockWithVariants(productId, variantId, quantity, userId, referenceId = null, notes = '', shopId = null) {
     try {
       const connection = await db.getConnection();
       
@@ -520,8 +523,8 @@ class StockService {
         // Record transaction for the variant
         await connection.query(
           `INSERT INTO stock_transactions 
-           (product_id, transaction_type, unit_id, quantity, quantity_in_ml, reference_type, reference_id, user_id, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (product_id, transaction_type, unit_id, quantity, quantity_in_ml, reference_type, reference_id, user_id, notes, shop_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             productId,
             'REMOVE',
@@ -531,7 +534,8 @@ class StockService {
             'SALE',
             referenceId,
             userId,
-            `Sold as ${quantity}x ${variantDetail.variant_name}. ${notes}`
+            `Sold as ${quantity}x ${variantDetail.variant_name}. ${notes}`,
+            shopId
           ]
         );
 

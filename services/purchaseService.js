@@ -10,7 +10,7 @@ class PurchaseService {
   /**
    * Create a new purchase order with items
    */
-  async createPurchase(purchaseData, items, userId) {
+  async createPurchase(purchaseData, items, userId, shopId) {
     const connection = await db.getConnection();
     
     try {
@@ -22,13 +22,14 @@ class PurchaseService {
       // Insert purchase order
       const [purchaseResult] = await connection.query(
         `INSERT INTO purchase_orders 
-         (purchase_number, supplier_id, purchase_date, invoice_number, invoice_date, 
+         (purchase_number, supplier_id, shop_id, purchase_date, invoice_number, invoice_date, 
           total_amount, tax_amount, discount_amount, net_amount, payment_status, 
           payment_method, notes, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           purchaseNumber,
           purchaseData.supplierId,
+          shopId,
           purchaseData.purchaseDate,
           purchaseData.invoiceNumber || null,
           purchaseData.invoiceDate || null,
@@ -76,7 +77,8 @@ class PurchaseService {
           item.quantity,
           userId,
           purchaseId,
-          `Purchase ${purchaseNumber}`
+          `Purchase ${purchaseNumber}`,
+          shopId
         );
       }
 
@@ -116,7 +118,7 @@ class PurchaseService {
   /**
    * Add stock from purchase (internal method)
    */
-  async addStockFromPurchase(connection, productId, unitId, quantity, userId, purchaseId, notes) {
+  async addStockFromPurchase(connection, productId, unitId, quantity, userId, purchaseId, notes, shopId) {
     // Get unit info for ML calculation
     const [unitInfo] = await connection.query(
       'SELECT ml_capacity FROM product_units WHERE id = ?',
@@ -129,9 +131,9 @@ class PurchaseService {
     await connection.query(
       `INSERT INTO stock_transactions 
        (product_id, transaction_type, unit_id, quantity, quantity_in_ml, 
-        reference_type, reference_id, user_id, notes)
-       VALUES (?, 'ADD', ?, ?, ?, 'PURCHASE', ?, ?, ?)`,
-      [productId, unitId, quantity, quantityInMl, purchaseId, userId, notes]
+        reference_type, reference_id, user_id, notes, shop_id)
+       VALUES (?, 'ADD', ?, ?, ?, 'PURCHASE', ?, ?, ?, ?)`,
+      [productId, unitId, quantity, quantityInMl, purchaseId, userId, notes, shopId]
     );
 
     // Update stock balance
@@ -147,8 +149,8 @@ class PurchaseService {
       );
     } else {
       await connection.query(
-        'INSERT INTO stock_balance (product_id, unit_id, current_quantity) VALUES (?, ?, ?)',
-        [productId, unitId, quantity]
+        'INSERT INTO stock_balance (product_id, unit_id, current_quantity, shop_id) VALUES (?, ?, ?, ?)',
+        [productId, unitId, quantity, shopId]
       );
     }
   }

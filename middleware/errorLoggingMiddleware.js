@@ -56,7 +56,7 @@ const responseTimeMiddleware = (req, res, next) => {
         statusCode: res.statusCode || 200,
         method: req.method,
         endpoint: req.originalUrl || req.path,
-        error: data.error || 'Unknown error in response',
+        error: data.error || data.message || 'Unknown error in response',
         details: data.details,
         shopId: req.shop_id || req.body?.shop_id || req.query?.shop_id || null,
         userId: req.user?.id || req.user?.username || null,

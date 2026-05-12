@@ -29,6 +29,7 @@ class StockController {
       } = req.body;
 
       const userId = req.user?.id || null;
+      const shopId = req.user?.shopId || req.query?.shop_id || null;
 
       const result = await stockService.addStock(
         productId,
@@ -37,7 +38,8 @@ class StockController {
         userId,
         referenceType,
         referenceId,
-        notes
+        notes,
+        shopId
       );
 
       res.json({
@@ -75,6 +77,7 @@ class StockController {
       } = req.body;
 
       const userId = req.user?.id || null;
+      const shopId = req.user?.shopId || req.query?.shop_id || null;
 
       const result = await stockService.removeStock(
         productId,
@@ -83,7 +86,8 @@ class StockController {
         userId,
         referenceType,
         referenceId,
-        notes
+        notes,
+        shopId
       );
 
       res.json({
@@ -120,6 +124,7 @@ class StockController {
       } = req.body;
 
       const userId = req.user?.id || null;
+      const shopId = req.user?.shopId || req.query?.shop_id || null;
 
       const result = await stockService.removeStockWithVariants(
         productId,
@@ -127,7 +132,8 @@ class StockController {
         quantity,
         userId,
         referenceId,
-        notes
+        notes,
+        shopId
       );
 
       res.json({

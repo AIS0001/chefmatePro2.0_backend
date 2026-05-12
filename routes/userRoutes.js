@@ -9,6 +9,7 @@ const savebillController = require("../controllers/billControl");
 const deletecontroller = require("../controllers/deletecontrol");
 const viewcontroller = require("../controllers/viewcontrol");
 const updatecontroller = require("../controllers/updatecontrol");
+const loyaltycontroller = require("../controllers/loyaltyController");
 const monitoringSupportController = require('../controllers/monitoringSupportController');
 const { db } = require('../config/dbconnection');
 // const featureController = require("../controllers/featureController"); // Disabled
@@ -123,6 +124,26 @@ router.post('/saveSupplierPayment',auth.isAuthorize, billcontroller.saveSupplier
 router.post('/savebill',auth.isAuthorize,savebillController.savebill);
 router.post('/public/savebill',savebillController.kiosksavebill);
 router.post('/advancesavebill',auth.isAuthorize,savebillController.advancesavebill);
+router.get('/loyalty/programs', auth.isAuthorize, loyaltycontroller.getLoyaltyPrograms);
+router.post('/loyalty/programs', auth.isAuthorize, loyaltycontroller.createLoyaltyProgram);
+router.put('/loyalty/programs/:program_id', auth.isAuthorize, loyaltycontroller.updateLoyaltyProgram);
+router.post('/loyalty/programs/starter-setup', auth.isAuthorize, loyaltycontroller.createStarterProgramSetup);
+router.get('/loyalty/offers', auth.isAuthorize, loyaltycontroller.getLoyaltyOffers);
+router.post('/loyalty/offers', auth.isAuthorize, loyaltycontroller.createLoyaltyOffer);
+router.put('/loyalty/offers/:offer_id', auth.isAuthorize, loyaltycontroller.updateLoyaltyOffer);
+router.get('/loyalty/customers', auth.isAuthorize, loyaltycontroller.getLoyaltyCustomers);
+router.post('/loyalty/members/enroll', auth.isAuthorize, loyaltycontroller.enrollLoyaltyMember);
+router.get('/loyalty/transactions/:member_id', auth.isAuthorize, loyaltycontroller.getLoyaltyTransactions);
+router.post('/loyalty/transactions/earn', auth.isAuthorize, loyaltycontroller.earnPoints);
+router.post('/loyalty/transactions/redeem', auth.isAuthorize, loyaltycontroller.redeemPoints);
+router.post('/loyalty/transactions/adjust', auth.isAuthorize, loyaltycontroller.adjustPoints);
+router.get('/loyalty/offers/eligible/list', auth.isAuthorize, loyaltycontroller.getEligibleOffers);
+router.post('/loyalty/offers/redeem', auth.isAuthorize, loyaltycontroller.redeemOffer);
+router.get('/loyalty/redemptions/history', auth.isAuthorize, loyaltycontroller.getRedemptionHistory);
+router.get('/loyalty/analytics/dashboard', auth.isAuthorize, loyaltycontroller.getLoyaltyAnalytics);
+router.post('/loyalty/notifications/line/queue', auth.isAuthorize, loyaltycontroller.enqueueMarketingNotification);
+// Public — no auth required
+router.get('/loyalty/public/check', loyaltycontroller.getPublicMemberInfo);
 router.post('/insertdatabulk/:tablename',auth.isAuthorize,insertcontroller.insertdatabulk);
 router.post('/insertdatabulkgst/:tablename',auth.isAuthorize,insertcontroller.insertdatabulkgst);
 
