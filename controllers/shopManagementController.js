@@ -3,46 +3,68 @@
  * Handles shop-specific operations by shop owners/managers
  */
 
-const connection = require('../config/dbconnection');
+const { db } = require('../config/dbconnection');
+
+const connection = {
+  query: (sql, params, callback) => {
+    let queryParams = params;
+    let queryCallback = callback;
+
+    if (typeof params === 'function') {
+      queryCallback = params;
+      queryParams = [];
+    }
+
+    if (typeof queryCallback === 'function') {
+      db.query(sql, queryParams)
+        .then(([rows]) => queryCallback(null, rows))
+        .catch((err) => queryCallback(err));
+      return;
+    }
+
+    return db.query(sql, queryParams).then(([rows]) => rows);
+  },
+};
+
+const queryAsync = (sql, params = []) => new Promise((resolve, reject) => {
+  connection.query(sql, params, (err, rows) => {
+    if (err) return reject(err);
+    resolve(rows);
+  });
+});
 
 /**
  * Get current shop profile
  */
-exports.getShopProfile = (req, res) => {
+exports.getShopProfile = async (req, res) => {
   try {
     const shopId = req.shop_id;
 
     const query = `
-      SELECT 
+      SELECT
         s.*,
         sp.name as plan_name,
         sp.price_per_month,
         sp.max_terminals,
         sp.max_users,
         sp.storage_quota_gb,
-        COUNT(DISTINCT sa.id) as total_staff,
-        COUNT(DISTINCT u.id) as total_users
+        0 as total_staff,
+        0 as total_users
       FROM shops s
       LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
-      LEFT JOIN shop_admins sa ON s.id = sa.shop_id AND sa.is_active = 1
-      LEFT JOIN users u ON s.id = u.shop_id AND u.is_active = 1
       WHERE s.id = ?
-      GROUP BY s.id
+      LIMIT 1
     `;
 
-    connection.query(query, [shopId], (err, results) => {
-      if (err) {
-        return res.status(500).json({ error: 'Failed to fetch shop profile', details: err });
-      }
+    const results = await queryAsync(query, [shopId]);
 
-      if (results.length === 0) {
-        return res.status(404).json({ error: 'Shop not found' });
-      }
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
 
-      res.json({ success: true, data: results[0] });
-    });
+    res.json({ success: true, data: results[0] });
   } catch (error) {
-    res.status(500).json({ error: 'Server error', details: error.message });
+    res.status(500).json({ error: 'Failed to fetch shop profile', details: error.message });
   }
 };
 
@@ -345,6 +367,176 @@ exports.upgradeSubscription = (req, res) => {
           plan: plans[0],
         });
       });
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error', details: error.message });
+  }
+};
+
+/**
+ * Get subscription overview: plan info, payment summary, history
+ */
+exports.getSubscriptionOverview = async (req, res) => {
+  try {
+    const shopId = req.shop_id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+
+    let shopRows = [];
+    try {
+      const shopQueryPrimary = `
+        SELECT
+          s.id AS shop_id,
+          s.subscription_status AS shop_subscription_status,
+          sp.name AS plan_name,
+          sp.price_per_month,
+          COALESCE(s.subscription_start_date, ss.start_date) AS start_date,
+          COALESCE(s.subscription_end_date, ss.end_date) AS end_date,
+          COALESCE(ss.subscription_type, 'MONTHLY') AS subscription_type,
+          COALESCE(ss.renewal_date, s.subscription_end_date) AS renewal_date,
+          CASE
+            WHEN s.subscription_end_date IS NULL THEN 'N/A'
+            WHEN s.subscription_end_date >= CURDATE() THEN 'ACTIVE'
+            ELSE 'EXPIRED'
+          END AS subscription_status
+        FROM shops s
+        LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
+        LEFT JOIN shop_subscriptions ss ON ss.shop_id = s.id AND ss.status = 'ACTIVE'
+        WHERE s.id = ?
+        LIMIT 1
+      `;
+      shopRows = await queryAsync(shopQueryPrimary, [shopId]);
+    } catch (primaryErr) {
+      try {
+        const shopQueryFallback = `
+          SELECT
+            s.id AS shop_id,
+            NULL AS shop_subscription_status,
+            sp.name AS plan_name,
+            sp.price_per_month,
+            s.subscription_start_date AS start_date,
+            s.subscription_end_date AS end_date,
+            'MONTHLY' AS subscription_type,
+            s.subscription_end_date AS renewal_date,
+            CASE
+              WHEN s.subscription_end_date IS NULL THEN 'N/A'
+              WHEN s.subscription_end_date >= CURDATE() THEN 'ACTIVE'
+              ELSE 'EXPIRED'
+            END AS subscription_status
+          FROM shops s
+          LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
+          WHERE s.id = ?
+          LIMIT 1
+        `;
+        shopRows = await queryAsync(shopQueryFallback, [shopId]);
+      } catch (fallbackErr) {
+        const shopQueryMinimal = `
+          SELECT
+            s.id AS shop_id,
+            NULL AS shop_subscription_status,
+            sp.name AS plan_name,
+            sp.price_per_month,
+            NULL AS start_date,
+            NULL AS end_date,
+            'MONTHLY' AS subscription_type,
+            NULL AS renewal_date,
+            'N/A' AS subscription_status
+          FROM shops s
+          LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
+          WHERE s.id = ?
+          LIMIT 1
+        `;
+        shopRows = await queryAsync(shopQueryMinimal, [shopId]);
+      }
+    }
+
+    const shopRow = shopRows[0] || {};
+
+    let paymentSummary = {
+      total_paid_amount: 0,
+      paid_count: 0,
+      total_unpaid_amount: 0,
+      unpaid_count: 0,
+      overdue_amount: 0,
+    };
+    let nextDueRows = [];
+    let paymentHistory = [];
+
+    try {
+      const summaryRows = await queryAsync(
+        `
+          SELECT
+            COALESCE(SUM(CASE WHEN payment_status = 'COMPLETED' THEN amount ELSE 0 END), 0) AS total_paid_amount,
+            COUNT(CASE WHEN payment_status = 'COMPLETED' THEN 1 END) AS paid_count,
+            COALESCE(SUM(CASE WHEN payment_status IN ('PENDING','FAILED','CANCELLED') THEN amount ELSE 0 END), 0) AS total_unpaid_amount,
+            COUNT(CASE WHEN payment_status IN ('PENDING','FAILED','CANCELLED') THEN 1 END) AS unpaid_count,
+            COALESCE(SUM(CASE WHEN payment_status IN ('PENDING','FAILED','CANCELLED') AND due_date < CURDATE() THEN amount ELSE 0 END), 0) AS overdue_amount
+          FROM payment_records
+          WHERE shop_id = ?
+        `,
+        [shopId]
+      );
+      paymentSummary = summaryRows[0] || paymentSummary;
+
+      nextDueRows = await queryAsync(
+        `
+          SELECT id, amount, payment_status, due_date, payment_method, payment_type, reference_number
+          FROM payment_records
+          WHERE shop_id = ? AND payment_status IN ('PENDING','FAILED')
+          ORDER BY due_date ASC
+          LIMIT 1
+        `,
+        [shopId]
+      );
+
+      paymentHistory = await queryAsync(
+        `
+          SELECT id, amount, payment_status, due_date, paid_date, payment_method, payment_type, reference_number
+          FROM payment_records
+          WHERE shop_id = ?
+          ORDER BY due_date DESC
+          LIMIT ?
+        `,
+        [shopId, limit]
+      );
+    } catch (paymentErr) {
+      // payment_records table or fields may not exist in some schema snapshots.
+    }
+
+    const nextDuePayment = nextDueRows[0] || (() => {
+      const fallbackDueDate = shopRow.renewal_date || shopRow.end_date || null;
+      if (!fallbackDueDate) return null;
+      return {
+        id: null,
+        amount: shopRow.price_per_month || 0,
+        payment_status: 'PENDING',
+        due_date: fallbackDueDate,
+        payment_method: null,
+        payment_type: shopRow.subscription_type || 'MONTHLY',
+        reference_number: null,
+      };
+    })();
+
+    const normalizedStatus = String(shopRow.shop_subscription_status || '').trim().toUpperCase();
+    const resolvedSubscriptionStatus = normalizedStatus || shopRow.subscription_status || 'N/A';
+
+    res.json({
+      success: true,
+      data: {
+        shop_id: shopId,
+        subscription: {
+          plan_name: shopRow.plan_name || null,
+          price_per_month: shopRow.price_per_month || null,
+          price_per_year: shopRow.price_per_month ? (shopRow.price_per_month * 12) : null,
+          subscription_type: shopRow.subscription_type || null,
+          start_date: shopRow.start_date || null,
+          end_date: shopRow.end_date || null,
+          renewal_date: shopRow.renewal_date || null,
+          subscription_status: resolvedSubscriptionStatus,
+        },
+        payment_summary: paymentSummary,
+        next_due_payment: nextDuePayment,
+        payment_history: paymentHistory,
+      },
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });

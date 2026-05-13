@@ -55,7 +55,17 @@ const login = async (req, res) => {
     }
 
     const { uname, pass, mac_address, device_name } = req.body;
-    const query = `SELECT u.*, s.name AS shop_name FROM users u LEFT JOIN shops s ON u.shop_id = s.id WHERE u.uname = ?`;
+    const query = `
+      SELECT
+        u.*,
+        s.name AS shop_name,
+        sp.name AS plan_name
+      FROM users u
+      LEFT JOIN shops s ON u.shop_id = s.id
+      LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
+      WHERE u.uname = ?
+      LIMIT 1
+    `;
 
     const [rows] = await db.query(query, [uname]);
 

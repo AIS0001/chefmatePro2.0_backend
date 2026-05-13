@@ -48,6 +48,9 @@ router.get('/analytics', shopManagementController.getShopAnalytics);
 // SUBSCRIPTION ROUTES
 // =====================================================
 
+// Get subscription overview (plan + payment summary + history)
+router.get('/subscription/overview', shopManagementController.getSubscriptionOverview);
+
 // Upgrade subscription plan
 router.post('/subscription/upgrade', shopManagementController.upgradeSubscription);
 

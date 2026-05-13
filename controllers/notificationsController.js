@@ -109,7 +109,7 @@ const createNotification = async (req, res) => {
         shopIds: targetType === 'specific_shops' ? shopIds : undefined,
         userIds: targetType === 'specific_users' ? userIds : undefined
       });
-      console.log(`[Notifications] Broadcasted notification ${result.insertId} via WebSocket`);
+     // console.log(`[Notifications] Broadcasted notification ${result.insertId} via WebSocket`);
     } catch (wsError) {
       console.error('[Notifications] WebSocket broadcast error:', wsError);
       // Don't fail the API call if WebSocket broadcast fails
@@ -135,22 +135,22 @@ const createNotification = async (req, res) => {
  */
 const createReadStatusRecords = async (notificationId, ids, targetType, idType = 'shops') => {
   try {
-    console.log(`[Notifications] Creating read status records for notification ${notificationId}, targetType: ${targetType}, ids:`, ids);
+  //  console.log(`[Notifications] Creating read status records for notification ${notificationId}, targetType: ${targetType}, ids:`, ids);
     
     if (idType === 'shops') {
       // For specific shops, create records for all users in those shops
       for (const shopId of ids) {
-        console.log(`[Notifications] Creating records for shop ${shopId}`);
+      //  console.log(`[Notifications] Creating records for shop ${shopId}`);
         // Get all users in this shop
         const [users] = await db.query('SELECT id FROM users WHERE shop_id = ?', [shopId]);
-        console.log(`[Notifications] Found ${users.length} users in shop ${shopId}`);
+     //   console.log(`[Notifications] Found ${users.length} users in shop ${shopId}`);
         
         for (const user of users) {
           const [result] = await db.query(
             'INSERT IGNORE INTO notification_read_status (notification_id, shop_id, user_id, is_read) VALUES (?, ?, ?, 0)',
             [notificationId, shopId, user.id]
           );
-          console.log(`[Notifications] Created read status for notification ${notificationId}, shop ${shopId}, user ${user.id}`);
+        //  console.log(`[Notifications] Created read status for notification ${notificationId}, shop ${shopId}, user ${user.id}`);
         }
       }
     } else if (idType === 'users') {
@@ -163,7 +163,7 @@ const createReadStatusRecords = async (notificationId, ids, targetType, idType =
           'INSERT IGNORE INTO notification_read_status (notification_id, shop_id, user_id, is_read) VALUES (?, ?, ?, 0)',
           [notificationId, shopId, userId]
         );
-        console.log(`[Notifications] Created read status for notification ${notificationId}, shop ${shopId}, user ${userId}`);
+        // console.log(`[Notifications] Created read status for notification ${notificationId}, shop ${shopId}, user ${userId}`);
       }
     }
   } catch (error) {
@@ -239,7 +239,7 @@ const getUserNotifications = async (req, res) => {
     const { page = 1, limit = 20, unreadOnly = false } = req.query;
     const offset = (page - 1) * limit;
 
-    console.log(`[Notifications] Fetching notifications for User ${userId}, Shop ${shopId}, Page ${page}, UnreadOnly: ${unreadOnly}`);
+    // console.log(`[Notifications] Fetching notifications for User ${userId}, Shop ${shopId}, Page ${page}, UnreadOnly: ${unreadOnly}`);
 
     // Query notifications that are either 'all' or target this shop/user
     let query = `
@@ -270,13 +270,13 @@ const getUserNotifications = async (req, res) => {
     query += ` ORDER BY n.priority DESC, n.created_at DESC LIMIT ? OFFSET ?`;
     params.push(parseInt(limit), offset);
 
-    console.log(`[Notifications] Params:`, params);
+    // console.log(`[Notifications] Params:`, params);
 
     const [notifications] = await db.query(query, params);
 
     const total = notifications.length > 0 ? notifications[0].total_count : 0;
 
-    console.log(`[Notifications] ✅ Found ${notifications.length} notifications for User ${userId}, Shop ${shopId}`);
+    // console.log(`[Notifications] ✅ Found ${notifications.length} notifications for User ${userId}, Shop ${shopId}`);
 
     res.json({
       success: true,
@@ -326,7 +326,7 @@ const getNotificationDetail = async (req, res) => {
     const shopId = req.shop_id || req.query.shop_id || 0;
     const userId = req.user?.id || 1;
 
-    console.log(`[Notifications] Fetching detail for notification ${id}, user ${userId}, shop ${shopId}`);
+    // console.log(`[Notifications] Fetching detail for notification ${id}, user ${userId}, shop ${shopId}`);
 
     const [notifications] = await db.query(`
       SELECT n.*, 
@@ -345,7 +345,7 @@ const getNotificationDetail = async (req, res) => {
     `, [userId, id, shopId, userId]);
 
     if (!notifications || notifications.length === 0) {
-      console.warn(`[Notifications] Notification ${id} not found for user ${userId}`);
+      // console.warn(`[Notifications] Notification ${id} not found for user ${userId}`);
       return res.status(404).json({
         success: false,
         error: 'Notification not found'
@@ -403,7 +403,7 @@ const markNotificationAsRead = async (req, res) => {
     const shopId = req.body?.shop_id || req.shop_id || req.query.shop_id || 0;
     const userId = req.user?.id || 1;
 
-    console.log(`[Notifications] Marking notification ${id} as read for User ${userId}, Shop ${shopId}`);
+   // console.log(`[Notifications] Marking notification ${id} as read for User ${userId}, Shop ${shopId}`);
 
     // Use INSERT ... ON DUPLICATE KEY UPDATE to create record if it doesn't exist
     const [result] = await db.query(
@@ -413,7 +413,7 @@ const markNotificationAsRead = async (req, res) => {
       [id, shopId, userId]
     );
 
-    console.log(`[Notifications] ✅ Notification ${id} marked as read, affected rows: ${result.affectedRows}`);
+   // console.log(`[Notifications] ✅ Notification ${id} marked as read, affected rows: ${result.affectedRows}`);
 
     res.json({
       success: true,
@@ -440,7 +440,7 @@ const getUnreadCount = async (req, res) => {
     const userId = req.user?.id || 1;
     const shopId = req.user?.shop_id || req.query.shop_id || req.shop_id;
 
-    console.log(`[Notifications] Fetching unread count for User ${userId}, Shop ${shopId}`);
+  //  console.log(`[Notifications] Fetching unread count for User ${userId}, Shop ${shopId}`);
 
     const [result] = await db.query(`
       SELECT COUNT(*) as unread_count
@@ -460,7 +460,7 @@ const getUnreadCount = async (req, res) => {
     `, [userId, shopId, userId]);
 
     const unreadCount = result[0]?.unread_count || 0;
-    console.log(`[Notifications] ✅ Unread count: ${unreadCount} for User ${userId}, Shop ${shopId}`);
+   // console.log(`[Notifications] ✅ Unread count: ${unreadCount} for User ${userId}, Shop ${shopId}`);
 
     res.json({
       success: true,
@@ -510,7 +510,7 @@ const deleteNotification = async (req, res) => {
       }, {
         targetType: 'all'
       });
-      console.log(`[Notifications] Broadcasted deletion of notification ${id} via WebSocket`);
+     // console.log(`[Notifications] Broadcasted deletion of notification ${id} via WebSocket`);
     } catch (wsError) {
       console.error('[Notifications] WebSocket broadcast error:', wsError);
       // Don't fail the API call if WebSocket broadcast fails

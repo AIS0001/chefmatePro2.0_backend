@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const os = require('os');
 const { normalizeBillPrefix } = require('../helpers/shopBillPrefix');
+const websocketManager = require('../helpers/websocketManager');
 
 let lastProcessCpuSample = {
   usage: process.cpuUsage(),
@@ -310,24 +311,31 @@ exports.getAllShops = async (req, res) => {
     const status = req.query.status; // Filter by status
     const search = req.query.search; // Search by name or code
 
-    let query = 'SELECT * FROM shops WHERE 1=1';
-    let countQuery = 'SELECT COUNT(*) as total FROM shops WHERE 1=1';
+    let query = `
+      SELECT
+        s.*,
+        sp.name as plan_name
+      FROM shops s
+      LEFT JOIN subscription_plans sp ON s.subscription_plan_id = sp.id
+      WHERE 1=1
+    `;
+    let countQuery = 'SELECT COUNT(*) as total FROM shops s WHERE 1=1';
     const params = [];
 
     if (status) {
-      query += ' AND subscription_status = ?';
-      countQuery += ' AND subscription_status = ?';
+      query += ' AND s.subscription_status = ?';
+      countQuery += ' AND s.subscription_status = ?';
       params.push(status);
     }
 
     if (search) {
-      query += ' AND (name LIKE ? OR shop_code LIKE ?)';
-      countQuery += ' AND (name LIKE ? OR shop_code LIKE ?)';
+      query += ' AND (s.name LIKE ? OR s.shop_code LIKE ?)';
+      countQuery += ' AND (s.name LIKE ? OR s.shop_code LIKE ?)';
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
     const countParams = [...params];
 
     const [countResult] = await db.query(countQuery, countParams);
@@ -506,7 +514,7 @@ exports.updateShop = async (req, res) => {
     const allowedFields = [
       'name', 'bill_prefix', 'phone_number', 'email', 'address', 'city', 'state',
       'zip_code', 'country', 'website', 'contact_person', 'contact_person_phone',
-      'subscription_status', 'no_of_terminals', 'max_users', 'storage_quota_gb',
+      'subscription_status', 'subscription_plan_id', 'no_of_terminals', 'max_users', 'storage_quota_gb',
     ];
 
     const updateFields = [];
@@ -521,6 +529,17 @@ exports.updateShop = async (req, res) => {
 
           updateFields.push(`${field} = ?`);
           params.push(normalizedBillPrefix);
+          continue;
+        }
+
+        if (field === 'subscription_plan_id') {
+          const normalizedPlanId = Number(updates[field]);
+          if (!Number.isInteger(normalizedPlanId) || normalizedPlanId <= 0) {
+            return res.status(400).json({ error: 'Invalid subscription plan selected' });
+          }
+
+          updateFields.push(`${field} = ?`);
+          params.push(normalizedPlanId);
           continue;
         }
 
@@ -561,6 +580,37 @@ exports.updateShop = async (req, res) => {
         `UPDATE company_profile SET ${companyUpdates.join(', ')} WHERE shop_id = ?`,
         companyParams
       ).catch(err => console.error('Failed to sync companyinfo on shop update:', err));
+    }
+
+    // If subscription_plan_id was updated, send a notification to the shop
+    if ('subscription_plan_id' in updates) {
+      try {
+        const newPlanId = Number(updates.subscription_plan_id);
+        const [planRows] = await db.query('SELECT name FROM subscription_plans WHERE id = ?', [newPlanId]);
+        const planName = planRows && planRows.length > 0 ? planRows[0].name : 'new plan';
+        const shopIdNum = Number(shop_id);
+
+        const notifTitle = 'Subscription Plan Upgraded';
+        const notifMessage = `Your subscription package has been upgraded to ${planName}. Enjoy your new features!`;
+
+        const [notifResult] = await db.query(
+          `INSERT INTO notifications (title, message, notification_type, target_type, shop_ids, created_by, priority, is_active)
+           VALUES (?, ?, 'subscription', 'specific_shops', ?, ?, 'high', 1)`,
+          [notifTitle, notifMessage, JSON.stringify([shopIdNum]), req.user.id]
+        );
+
+        // Broadcast via WebSocket in real-time
+        try {
+          websocketManager.broadcastNotification(
+            { id: notifResult.insertId, title: notifTitle, message: notifMessage, notificationType: 'subscription', priority: 'high', createdAt: new Date().toISOString() },
+            { targetType: 'specific_shops', shopIds: [shopIdNum] }
+          );
+        } catch (wsErr) {
+          console.error('[Notifications] WebSocket broadcast error on plan upgrade:', wsErr);
+        }
+      } catch (notifErr) {
+        console.error('Failed to create plan upgrade notification:', notifErr);
+      }
     }
 
     res.json({ success: true, message: 'Shop updated successfully' });
@@ -860,9 +910,15 @@ exports.getShopUsers = async (req, res) => {
       SELECT id, shop_id, user_uuid, name, uname, contact, email, type, status, last_loggedin
       FROM users
       WHERE shop_id = ?
+         OR id IN (
+           SELECT sa.user_id
+           FROM shop_admins sa
+           WHERE sa.shop_id = ?
+             AND sa.user_id IS NOT NULL
+         )
       ORDER BY id DESC
     `;
-    const [results] = await db.query(query, [shop_id]);
+    const [results] = await db.query(query, [shop_id, shop_id]);
     res.json({ success: true, data: results });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });
