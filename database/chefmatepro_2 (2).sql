@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: May 13, 2026 at 09:13 AM
+-- Generation Time: May 14, 2026 at 12:58 PM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS `company_profile` (
 
 INSERT INTO `company_profile` (`id`, `shop_id`, `name`, `tax_id`, `phone_number`, `email`, `address`, `website`, `city`, `state`, `zip_code`, `country`, `logo`, `logo_type`, `logo_name`, `qr_code`, `qr_code_type`, `qr_code_name`, `bank_name`, `account_number`, `account_name`, `routing_number`, `swift_code`, `payment_methods`, `terms_and_conditions`, `created_at`, `updated_at`, `created_by`, `updated_by`, `is_active`) VALUES
 (3, 4, 'Cloud7', '4525545465', '+6698653256', 'cloud7@gmail.com', 'Sout Pataya Chonburi', 'https://www.cloud7.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-27 09:55:23', '2026-03-27 16:09:03', NULL, NULL, 1),
-(5, 5, 'Demo Restaurant', '12345678930', '+661234567898', 'demo@gmail.com', '125/56,Near Demo,Demo City China ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-28 19:32:43', '2026-05-13 08:33:55', NULL, NULL, 1),
+(5, 5, 'Demo Restaurant', '12345678930', '+661234567898', 'demo@gmail.com', '125/56,Near Demo,Demo City China ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-28 19:32:43', '2026-05-13 09:44:28', NULL, NULL, 1),
 (7, 7, 'JASLEEN RESTAURANT', 'xxxxxxxxxxxxx', '+66 84 848 6868', 'info@jasleenindianfood.com', '100 21 Soi Kamala 12, Kamala Kathu District, Phuket 83150, Thailand', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-29 05:14:44', '2026-03-29 05:14:44', NULL, NULL, 1),
 (9, 8, 'SUNRISE CAFE & RESTAURANT', 'XXXXXXXX', '+66-805401625', 'rajkirthwal@outlook.com', '31/3 Sukhumvit Soi 48 Phra Khanong Khlong Toei Bangkok', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-02 08:21:56', '2026-05-08 07:23:14', NULL, NULL, 1),
 (11, 9, 'WELCOME SUIT', '0205565021365', '+66-800062602', 'welcomesuit@gmail.com', '249/29-30 Moo 10, Muang Pattaya, Bang Lamung District, Chon Buri 20150', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-04-13 06:32:41', '2026-05-13 08:38:02', NULL, NULL, 1);
@@ -595,7 +595,7 @@ CREATE TABLE IF NOT EXISTS `error_logs` (
   KEY `idx_status` (`status`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_shop_error_status` (`shop_id`,`status`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 -- --------------------------------------------------------
 
@@ -701,7 +701,7 @@ CREATE TABLE IF NOT EXISTS `final_bill` (
   KEY `customer_id` (`customer_id`),
   KEY `idx_shop_id` (`shop_id`),
   KEY `idx_final_bill_inv_number` (`shop_id`,`inv_number`)
-) ENGINE=InnoDB AUTO_INCREMENT=532 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=545 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `final_bill`
@@ -818,7 +818,20 @@ INSERT INTO `final_bill` (`id`, `shop_id`, `customer_id`, `inv_number`, `inv_dat
 (528, 5, NULL, 'DM059', '2026-05-12', '17:58:16.000000', 'VIP 1', 1685.00, 'fixed', 50, 50, 1635, 106.96, 0, 1635.00, 'Cash', 0, 0.00, '2026-04-05', ''),
 (529, 5, NULL, 'DM060', '2026-05-12', '18:08:59.000000', 'VIP 1', 600.00, 'fixed', 50, 50, 550, 35.98, 0, 550.00, 'Card', 0, 0.00, '2026-04-05', ''),
 (530, 5, NULL, 'DM061', '2026-05-12', '18:27:21.000000', 'VIP 3', 280.00, 'percentage', 0, 0, 280, 18.32, 0, 280.00, 'Cash', 0, 0.00, '2026-04-05', ''),
-(531, 5, NULL, 'DM062', '2026-05-12', '18:31:17.000000', 'VIP 2', 1840.00, 'percentage', 0, 0, 1840, 120.37, 0, 1840.00, 'Card', 0, 0.00, '2026-04-05', '');
+(531, 5, NULL, 'DM062', '2026-05-12', '18:31:17.000000', 'VIP 2', 1840.00, 'percentage', 0, 0, 1840, 120.37, 0, 1840.00, 'Card', 0, 0.00, '2026-04-05', ''),
+(532, 5, NULL, 'DM063', '2026-05-14', '13:39:46.000000', 'VIP 1', 1340.00, 'percentage', 0, 0, 1340, 87.66, 0, 1340.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(533, 5, NULL, 'DM064', '2026-05-14', '13:40:40.000000', 'VIP 3', 880.00, 'percentage', 0, 0, 880, 57.57, 0, 880.00, 'Card', 0, 0.00, '2026-04-05', ''),
+(534, 5, NULL, 'DM065', '2026-05-14', '13:47:06.000000', 'Table 3', 510.00, 'percentage', 0, 0, 510, 33.36, 0, 510.00, 'Card', 0, 0.00, '2026-04-05', ''),
+(535, 5, NULL, 'DM066', '2026-05-14', '15:20:09.000000', 'VIP 3', 1535.00, 'percentage', 0, 0, 1535, 100.42, 0, 1535.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(536, 5, NULL, 'DM067', '2026-05-14', '15:21:29.000000', 'Table 1', 1790.00, 'percentage', 0, 0, 1790, 117.10, 0, 1790.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(537, 5, NULL, 'DM068', '2026-05-14', '15:23:48.000000', 'VIP 1', 3635.00, 'percentage', 0, 0, 3635, 237.80, 0, 3635.00, 'Card', 0, 0.00, '2026-04-05', ''),
+(538, 5, NULL, 'DM069', '2026-05-14', '15:27:15.000000', 'Table 2', 1235.00, 'percentage', 0, 0, 1235, 80.79, 0, 1235.00, 'Card', 0, 0.00, '2026-04-05', ''),
+(539, 5, NULL, 'DM070', '2026-05-14', '15:29:44.000000', 'VIP 2', 3045.00, 'percentage', 0, 0, 3045, 199.21, 0, 3045.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(540, 5, NULL, 'DM071', '2026-05-14', '15:36:08.000000', 'Table 2', 760.00, 'percentage', 0, 0, 760, 49.72, 0, 760.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(541, 5, NULL, 'DM072', '2026-05-14', '15:38:49.000000', 'VIP 2', 470.00, 'percentage', 0, 0, 470, 30.75, 0, 470.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(542, 5, NULL, 'DM073', '2026-05-14', '15:39:18.000000', 'VIP 3', 160.00, 'percentage', 0, 0, 160, 10.47, 0, 160.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(543, 5, NULL, 'DM074', '2026-05-14', '15:44:25.000000', 'Table 3', 2690.00, 'percentage', 0, 0, 2690, 175.98, 0, 2690.00, 'Cash', 0, 0.00, '2026-04-05', ''),
+(544, 5, NULL, 'DM075', '2026-05-14', '15:51:19.000000', 'VIP 1', 830.00, 'percentage', 0, 0, 830, 54.30, 0, 830.00, 'Card', 0, 0.00, '2026-04-05', '');
 
 -- --------------------------------------------------------
 
@@ -2318,6 +2331,130 @@ INSERT INTO `item_images` (`id`, `shop_id`, `product_id`, `filename`, `path`, `m
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `kds_orders`
+--
+
+DROP TABLE IF EXISTS `kds_orders`;
+CREATE TABLE IF NOT EXISTS `kds_orders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `shop_id` int NOT NULL,
+  `order_item_id` int DEFAULT NULL,
+  `source_table` varchar(64) NOT NULL DEFAULT 'order_items',
+  `order_id` varchar(100) DEFAULT NULL,
+  `table_number` varchar(100) DEFAULT NULL,
+  `item_name` varchar(255) NOT NULL,
+  `item_group` varchar(255) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `total_price` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `status` varchar(32) NOT NULL DEFAULT 'queue',
+  `setup_date` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_kds_shop_date_status` (`shop_id`,`setup_date`,`status`),
+  KEY `idx_kds_order_item` (`order_item_id`),
+  KEY `idx_kds_order_ref` (`order_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `kds_orders`
+--
+
+INSERT INTO `kds_orders` (`id`, `shop_id`, `order_item_id`, `source_table`, `order_id`, `table_number`, `item_name`, `item_group`, `quantity`, `total_price`, `status`, `setup_date`, `created_at`, `updated_at`) VALUES
+(1, 5, 2837, 'order_items', '86', 'VIP 1', 'Coffee1', NULL, 1.00, 120.00, 'completed', '2026-04-05', '2026-05-14 06:57:07', '2026-05-14 08:00:43'),
+(2, 5, 2838, 'order_items', '86', 'VIP 1', 'Coffee2', NULL, 1.00, 130.00, 'completed', '2026-04-05', '2026-05-14 06:57:07', '2026-05-14 08:00:43'),
+(3, 5, 2839, 'order_items', '86', 'VIP 1', 'Coffee3', NULL, 1.00, 60.00, 'completed', '2026-04-05', '2026-05-14 06:57:07', '2026-05-14 08:00:43'),
+(4, 5, 2840, 'order_items', '86', 'VIP 1', 'Snack 2', NULL, 1.00, 50.00, 'completed', '2026-04-05', '2026-05-14 06:57:07', '2026-05-14 08:00:43'),
+(5, 5, 2841, 'order_items', '86', 'VIP 1', 'เมนูแนะนำ', NULL, 1.00, 160.00, 'processing', '2026-04-05', '2026-05-14 06:57:07', '2026-05-14 08:00:46'),
+(6, 1, NULL, 'order_items', 'ORD-0001', 'T1', 'Butter Chicken', NULL, 2.00, 400.00, 'queue', '2026-05-14', '2026-05-14 06:58:05', '2026-05-14 06:58:05'),
+(7, 1, NULL, 'order_items', 'ORD-0001', 'T1', 'Garlic Naan', NULL, 4.00, 120.00, 'queue', '2026-05-14', '2026-05-14 06:58:05', '2026-05-14 06:58:05'),
+(8, 1, NULL, 'order_items', 'ORD-0002', 'T2', 'Paneer Tikka', NULL, 1.00, 220.00, 'processing', '2026-05-14', '2026-05-14 06:58:05', '2026-05-14 06:58:05'),
+(9, 1, NULL, 'order_items', 'ORD-0003', 'T3', 'Dal Makhani', NULL, 2.00, 300.00, 'completed', '2026-05-14', '2026-05-14 06:58:05', '2026-05-14 06:58:05'),
+(10, 5, 2842, 'order_items', '87', 'Table 3', 'Coffee1', NULL, 2.00, 240.00, 'queue', '2026-04-05', '2026-05-14 07:04:39', '2026-05-14 08:00:35'),
+(11, 5, 2843, 'order_items', '87', 'Table 3', 'Snack 2', NULL, 2.00, 100.00, 'queue', '2026-04-05', '2026-05-14 07:04:39', '2026-05-14 08:00:24'),
+(12, 5, 2844, 'order_items', '87', 'Table 3', 'Coffee4', NULL, 1.00, 150.00, 'queue', '2026-04-05', '2026-05-14 07:04:39', '2026-05-14 08:00:35'),
+(13, 5, 2845, 'order_items', '87', 'Table 3', 'Lunch 1', NULL, 1.00, 250.00, 'queue', '2026-04-05', '2026-05-14 07:04:39', '2026-05-14 07:04:39'),
+(14, 5, 2846, 'order_items', '87', 'Table 3', 'Lunch 2', NULL, 1.00, 230.00, 'queue', '2026-04-05', '2026-05-14 07:04:39', '2026-05-14 08:00:24'),
+(15, 5, 2847, 'order_items', '88', 'Table 1', 'Coffee4', NULL, 2.00, 300.00, 'queue', '2026-04-05', '2026-05-14 07:10:24', '2026-05-14 08:00:46'),
+(16, 5, 2848, 'order_items', '88', 'Table 1', 'Lunch 1', NULL, 3.00, 750.00, 'queue', '2026-04-05', '2026-05-14 07:10:24', '2026-05-14 08:00:46'),
+(17, 5, 2849, 'order_items', '88', 'Table 1', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 07:10:24', '2026-05-14 08:00:46'),
+(18, 5, 2850, 'order_items', '88', 'Table 1', 'Snack 3', NULL, 2.00, 390.00, 'queue', '2026-04-05', '2026-05-14 07:10:24', '2026-05-14 08:00:46'),
+(19, 5, 2851, 'order_items', '89', 'VIP 1', 'เมนูแนะนำ', NULL, 1.00, 160.00, 'completed', '2026-04-05', '2026-05-14 07:10:56', '2026-05-14 08:00:44'),
+(20, 5, 2852, 'order_items', '89', 'VIP 1', 'Lunch 1', NULL, 1.00, 250.00, 'completed', '2026-04-05', '2026-05-14 07:10:56', '2026-05-14 08:00:44'),
+(21, 5, 2853, 'order_items', '89', 'VIP 1', 'Lunch 2', NULL, 1.00, 230.00, 'completed', '2026-04-05', '2026-05-14 07:10:56', '2026-05-14 08:00:44'),
+(22, 5, 2854, 'order_items', '89', 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1.00, 120.00, 'completed', '2026-04-05', '2026-05-14 07:10:56', '2026-05-14 08:00:44'),
+(23, 5, 2855, 'order_items', '90', 'Table 3', 'Coffee1', NULL, 1.00, 120.00, 'completed', '2026-04-05', '2026-05-14 07:56:16', '2026-05-14 08:22:39'),
+(24, 5, 2856, 'order_items', '90', 'Table 3', 'Coffee2', NULL, 2.00, 260.00, 'completed', '2026-04-05', '2026-05-14 07:56:16', '2026-05-14 08:22:39'),
+(25, 5, 2857, 'order_items', '90', 'Table 3', 'Coffee3', NULL, 2.00, 120.00, 'completed', '2026-04-05', '2026-05-14 07:56:16', '2026-05-14 08:22:39'),
+(26, 5, 2858, 'order_items', '90', 'Table 3', 'Snack 2', NULL, 1.00, 50.00, 'completed', '2026-04-05', '2026-05-14 07:56:16', '2026-05-14 08:22:39'),
+(27, 5, 2859, 'order_items', '91', 'Table 3', 'มีเมนูแนะนำไหม', NULL, 2.00, 240.00, 'queue', '2026-04-05', '2026-05-14 07:56:30', '2026-05-14 08:00:37'),
+(28, 5, 2860, 'order_items', '91', 'Table 3', 'เมนูแนะนำ', NULL, 2.00, 320.00, 'queue', '2026-04-05', '2026-05-14 07:56:30', '2026-05-14 08:00:37'),
+(29, 5, 2861, 'order_items', '92', 'Table 1', 'Coffee3', NULL, 1.00, 60.00, 'completed', '2026-04-05', '2026-05-14 07:56:43', '2026-05-14 08:00:31'),
+(30, 5, 2862, 'order_items', '92', 'Table 1', 'Coffee2', NULL, 1.00, 130.00, 'completed', '2026-04-05', '2026-05-14 07:56:43', '2026-05-14 08:00:31'),
+(31, 5, 2863, 'order_items', '92', 'Table 1', 'Snack 1', NULL, 1.00, 50.00, 'completed', '2026-04-05', '2026-05-14 07:56:43', '2026-05-14 08:00:31'),
+(32, 5, 2864, 'order_items', '92', 'Table 1', 'Snack 2', NULL, 1.00, 50.00, 'completed', '2026-04-05', '2026-05-14 07:56:43', '2026-05-14 08:00:31'),
+(33, 5, 2865, 'order_items', '93', 'VIP 1', 'Coffee1', 'Food', 1.00, 120.00, 'queue', '2026-04-05', '2026-05-14 08:03:02', '2026-05-14 08:03:02'),
+(34, 5, 2866, 'order_items', '93', 'VIP 1', 'Coffee2', 'Food', 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:03:02', '2026-05-14 08:03:02'),
+(35, 5, 2867, 'order_items', '93', 'VIP 1', 'Coffee3', 'Food', 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:03:02', '2026-05-14 08:03:02'),
+(36, 5, 2868, 'order_items', '93', 'VIP 1', 'Coffee4', 'Food', 1.00, 150.00, 'queue', '2026-04-05', '2026-05-14 08:03:02', '2026-05-14 08:03:02'),
+(37, 5, 2869, 'order_items', '94', 'VIP 1', 'Coffee1', 'Food', 1.00, 120.00, 'queue', '2026-04-05', '2026-05-14 08:06:22', '2026-05-14 08:06:22'),
+(38, 5, 2870, 'order_items', '94', 'VIP 1', 'Coffee2', 'Food', 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:06:22', '2026-05-14 08:06:22'),
+(39, 5, 2871, 'order_items', '94', 'VIP 1', 'Coffee3', 'Food', 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:06:22', '2026-05-14 08:06:22'),
+(40, 5, 2872, 'order_items', '95', 'VIP 1', 'Coffee2', NULL, 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:07:07', '2026-05-14 08:07:07'),
+(41, 5, 2873, 'order_items', '95', 'VIP 1', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:07:07', '2026-05-14 08:07:07'),
+(42, 5, 2874, 'order_items', '95', 'VIP 1', 'Snack 2', NULL, 1.00, 50.00, 'queue', '2026-04-05', '2026-05-14 08:07:07', '2026-05-14 08:07:07'),
+(43, 5, 2875, 'order_items', '95', 'VIP 1', 'Snack 3', NULL, 1.00, 195.00, 'queue', '2026-04-05', '2026-05-14 08:07:07', '2026-05-14 08:07:07'),
+(44, 5, 2876, 'order_items', '96', 'Table 3', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:08:07', '2026-05-14 08:08:07'),
+(45, 5, 2877, 'order_items', '97', 'VIP 2', 'Coffee2', 'Food', 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:08:22', '2026-05-14 08:08:22'),
+(46, 5, 2878, 'order_items', '97', 'VIP 2', 'Coffee3', 'Food', 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:08:22', '2026-05-14 08:08:22'),
+(47, 5, 2879, 'order_items', '98', 'VIP 2', 'มีเมนูแนะนำไหม', 'Food', 1.00, 120.00, 'queue', '2026-04-05', '2026-05-14 08:09:55', '2026-05-14 08:09:55'),
+(48, 5, 2880, 'order_items', '98', 'VIP 2', 'เมนูแนะนำ', 'Food', 1.00, 160.00, 'queue', '2026-04-05', '2026-05-14 08:09:55', '2026-05-14 08:09:55'),
+(49, 5, 2881, 'order_items', '98', 'VIP 2', 'Coffee4', 'Food', 1.00, 150.00, 'queue', '2026-04-05', '2026-05-14 08:09:55', '2026-05-14 08:09:55'),
+(50, 5, 2882, 'order_items', '99', 'VIP 2', 'Coffee2', 'Food', 1.00, 130.00, 'processing', '2026-04-05', '2026-05-14 08:10:04', '2026-05-14 08:22:34'),
+(51, 5, 2883, 'order_items', '99', 'VIP 2', 'Coffee3', 'Food', 1.00, 60.00, 'processing', '2026-04-05', '2026-05-14 08:10:04', '2026-05-14 08:22:34'),
+(52, 5, 2884, 'order_items', '100', 'VIP 3', 'Coffee2', NULL, 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:10:21', '2026-05-14 08:10:21'),
+(53, 5, 2885, 'order_items', '100', 'VIP 3', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:10:21', '2026-05-14 08:10:21'),
+(54, 5, 2886, 'order_items', '101', 'VIP 3', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:11:39', '2026-05-14 08:50:01'),
+(55, 5, 2887, 'order_items', '101', 'VIP 3', 'Coffee4', NULL, 1.00, 150.00, 'queue', '2026-04-05', '2026-05-14 08:11:39', '2026-05-14 08:50:01'),
+(56, 5, 2888, 'order_items', '102', 'Table 2', 'Coffee2', 'Food', 1.00, 130.00, 'queue', '2026-04-05', '2026-05-14 08:11:55', '2026-05-14 08:11:55'),
+(57, 5, 2889, 'order_items', '102', 'Table 2', 'Coffee3', 'Food', 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:11:55', '2026-05-14 08:11:55'),
+(58, 5, 2890, 'order_items', '102', 'Table 2', 'Coffee4', 'Food', 1.00, 150.00, 'queue', '2026-04-05', '2026-05-14 08:11:55', '2026-05-14 08:11:55'),
+(59, 5, 2891, 'order_items', '103', 'Table 2', 'มีเมนูแนะนำไหม', 'Food', 1.00, 120.00, 'queue', '2026-04-05', '2026-05-14 08:13:27', '2026-05-14 08:13:27'),
+(60, 5, 2892, 'order_items', '102', 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1.00, 120.00, 'processing', '2026-04-05', '2026-05-14 08:13:39', '2026-05-14 08:22:35'),
+(61, 5, 2893, 'order_items', '102', 'VIP 1', 'เมนูแนะนำ', NULL, 1.00, 160.00, 'processing', '2026-04-05', '2026-05-14 08:13:39', '2026-05-14 08:22:35'),
+(62, 5, 2894, 'order_items', '104', 'VIP 1', 'Coffee2', 'Food', 1.00, 130.00, 'processing', '2026-04-05', '2026-05-14 08:14:44', '2026-05-14 08:22:28'),
+(63, 5, 2895, 'order_items', '104', 'VIP 1', 'Coffee3', 'Food', 1.00, 60.00, 'processing', '2026-04-05', '2026-05-14 08:14:44', '2026-05-14 08:22:28'),
+(64, 5, 2896, 'order_items', '105', 'VIP 1', 'Coffee4', 'Food', 1.00, 150.00, 'completed', '2026-04-05', '2026-05-14 08:15:05', '2026-05-14 08:22:37'),
+(65, 5, 2897, 'order_items', '105', 'VIP 1', 'Coffee3', 'Food', 1.00, 60.00, 'completed', '2026-04-05', '2026-05-14 08:15:05', '2026-05-14 08:22:37'),
+(66, 5, 2898, 'order_items', '105', 'VIP 1', 'มีเมนูแนะนำไหม', 'Food', 1.00, 120.00, 'completed', '2026-04-05', '2026-05-14 08:15:05', '2026-05-14 08:22:37'),
+(67, 5, 2899, 'order_items', '106', 'Table 3', 'มีเมนูแนะนำไหม', 'Food', 1.00, 120.00, 'completed', '2026-04-05', '2026-05-14 08:18:43', '2026-05-14 08:22:38'),
+(68, 5, 2900, 'order_items', '106', 'Table 3', 'เมนูแนะนำ', 'Food', 1.00, 160.00, 'completed', '2026-04-05', '2026-05-14 08:18:43', '2026-05-14 08:22:38'),
+(69, 5, 2901, 'order_items', '106', 'VIP 1', 'Lunch 2', NULL, 1.00, 230.00, 'processing', '2026-04-05', '2026-05-14 08:18:59', '2026-05-14 08:50:03'),
+(70, 5, 2902, 'order_items', '106', 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1.00, 120.00, 'processing', '2026-04-05', '2026-05-14 08:18:59', '2026-05-14 08:50:03'),
+(71, 5, 2903, 'order_items', '107', 'Table 3', 'มีเมนูแนะนำไหม', 'Food', 1.00, 120.00, 'processing', '2026-04-05', '2026-05-14 08:19:36', '2026-05-14 08:22:36'),
+(72, 5, 2904, 'order_items', '107', 'Table 3', 'Coffee4', 'Food', 1.00, 150.00, 'processing', '2026-04-05', '2026-05-14 08:19:36', '2026-05-14 08:22:36'),
+(73, 5, 2905, 'order_items', '108', 'Table 1', 'Coffee2', 'Food', 1.00, 130.00, 'processing', '2026-04-05', '2026-05-14 08:22:11', '2026-05-14 08:49:53'),
+(74, 5, 2906, 'order_items', '108', 'Table 1', 'Coffee3', 'Food', 1.00, 60.00, 'processing', '2026-04-05', '2026-05-14 08:22:11', '2026-05-14 08:49:53'),
+(75, 5, 2907, 'order_items', '108', 'Table 1', 'Coffee1', 'Food', 1.00, 120.00, 'processing', '2026-04-05', '2026-05-14 08:22:11', '2026-05-14 08:49:53'),
+(76, 5, 2908, 'order_items', '109', 'Table 2', 'มีเมนูแนะนำไหม', NULL, 1.00, 120.00, 'processing', '2026-04-05', '2026-05-14 08:32:00', '2026-05-14 08:49:54'),
+(77, 5, 2909, 'order_items', '109', 'Table 2', 'เมนูแนะนำ', NULL, 1.00, 160.00, 'processing', '2026-04-05', '2026-05-14 08:32:00', '2026-05-14 08:49:54'),
+(78, 5, 2910, 'order_items', '109', 'Table 2', 'Lunch 1', NULL, 1.00, 250.00, 'processing', '2026-04-05', '2026-05-14 08:32:00', '2026-05-14 08:49:54'),
+(79, 5, 2911, 'order_items', '109', 'Table 2', 'Lunch 2', NULL, 1.00, 230.00, 'processing', '2026-04-05', '2026-05-14 08:32:00', '2026-05-14 08:49:54'),
+(80, 5, 2912, 'order_items', '110', 'VIP 2', 'Coffee3', NULL, 1.00, 60.00, 'processing', '2026-04-05', '2026-05-14 08:37:04', '2026-05-14 08:49:55'),
+(81, 5, 2913, 'order_items', '110', 'VIP 2', 'เมนูแนะนำ', NULL, 1.00, 160.00, 'processing', '2026-04-05', '2026-05-14 08:37:04', '2026-05-14 08:49:55'),
+(82, 5, 2914, 'order_items', '110', 'VIP 2', 'Lunch 1', NULL, 1.00, 250.00, 'processing', '2026-04-05', '2026-05-14 08:37:04', '2026-05-14 08:49:55'),
+(83, 5, 2915, 'order_items', '111', 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 2.00, 240.00, 'processing', '2026-04-05', '2026-05-14 08:37:14', '2026-05-14 08:50:03'),
+(84, 5, 2916, 'order_items', '111', 'VIP 1', 'เมนูแนะนำ', NULL, 2.00, 320.00, 'processing', '2026-04-05', '2026-05-14 08:37:14', '2026-05-14 08:50:03'),
+(85, 5, 2917, 'order_items', '111', 'VIP 1', 'Snack 3', NULL, 1.00, 195.00, 'processing', '2026-04-05', '2026-05-14 08:37:14', '2026-05-14 08:50:03'),
+(86, 5, 2918, 'order_items', '111', 'VIP 1', 'LAYS', NULL, 1.00, 25.00, 'processing', '2026-04-05', '2026-05-14 08:37:14', '2026-05-14 08:50:03'),
+(87, 5, 2919, 'order_items', '111', 'VIP 1', 'Snack 1', NULL, 1.00, 50.00, 'processing', '2026-04-05', '2026-05-14 08:37:14', '2026-05-14 08:50:03'),
+(88, 5, 2920, 'order_items', '112', 'VIP 3', 'Snack 1', NULL, 1.00, 50.00, 'queue', '2026-04-05', '2026-05-14 08:39:10', '2026-05-14 08:39:10'),
+(89, 5, 2921, 'order_items', '112', 'VIP 3', 'Snack 2', NULL, 1.00, 50.00, 'queue', '2026-04-05', '2026-05-14 08:39:10', '2026-05-14 08:39:10'),
+(90, 5, 2922, 'order_items', '112', 'VIP 3', 'Coffee3', NULL, 1.00, 60.00, 'queue', '2026-04-05', '2026-05-14 08:39:10', '2026-05-14 08:39:10');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `kiosk_queue`
 --
 
@@ -2360,7 +2497,7 @@ CREATE TABLE IF NOT EXISTS `ledger_entries` (
   KEY `idx_transaction` (`transaction_id`),
   KEY `idx_account` (`account_id`,`account_type`(1)),
   KEY `idx_ledger_entries_shop_id` (`shop_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=171 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=192 DEFAULT CHARSET=latin1;
 
 --
 -- Dumping data for table `ledger_entries`
@@ -2530,7 +2667,28 @@ INSERT INTO `ledger_entries` (`id`, `shop_id`, `transaction_id`, `date`, `accoun
 (167, 5, '529', '2026-05-12 18:08:59', 'Sales', 1, 'Bill #DM060 - Sale Revenue', 0.00, 550.00, 0.00, 0, '2026-05-12 18:08:59', '2026-05-12 18:08:59'),
 (168, 5, '530', '2026-05-12 18:27:22', 'Sales', 1, 'Bill #DM061 - Sale Revenue', 0.00, 280.00, 0.00, 0, '2026-05-12 18:27:21', '2026-05-12 18:27:21'),
 (169, 5, '530', '2026-05-12 18:27:22', 'Cash', 0, 'Bill #DM061 - Cash Payment', 280.00, 0.00, 0.00, 0, '2026-05-12 18:27:21', '2026-05-12 18:27:21'),
-(170, 5, '531', '2026-05-12 18:31:17', 'Sales', 1, 'Bill #DM062 - Sale Revenue', 0.00, 1840.00, 0.00, 0, '2026-05-12 18:31:17', '2026-05-12 18:31:17');
+(170, 5, '531', '2026-05-12 18:31:17', 'Sales', 1, 'Bill #DM062 - Sale Revenue', 0.00, 1840.00, 0.00, 0, '2026-05-12 18:31:17', '2026-05-12 18:31:17'),
+(171, 5, '532', '2026-05-14 13:39:46', 'Sales', 1, 'Bill #DM063 - Sale Revenue', 0.00, 1340.00, 0.00, 0, '2026-05-14 13:39:46', '2026-05-14 13:39:46'),
+(172, 5, '532', '2026-05-14 13:39:46', 'Cash', 0, 'Bill #DM063 - Cash Payment', 1340.00, 0.00, 0.00, 0, '2026-05-14 13:39:46', '2026-05-14 13:39:46'),
+(173, 5, '533', '2026-05-14 13:40:40', 'Sales', 1, 'Bill #DM064 - Sale Revenue', 0.00, 880.00, 0.00, 0, '2026-05-14 13:40:40', '2026-05-14 13:40:40'),
+(174, 5, '534', '2026-05-14 13:47:06', 'Sales', 1, 'Bill #DM065 - Sale Revenue', 0.00, 510.00, 0.00, 0, '2026-05-14 13:47:06', '2026-05-14 13:47:06'),
+(175, 5, '535', '2026-05-14 15:20:09', 'Sales', 1, 'Bill #DM066 - Sale Revenue', 0.00, 1535.00, 0.00, 0, '2026-05-14 15:20:09', '2026-05-14 15:20:09'),
+(176, 5, '535', '2026-05-14 15:20:09', 'Cash', 0, 'Bill #DM066 - Cash Payment', 1535.00, 0.00, 0.00, 0, '2026-05-14 15:20:09', '2026-05-14 15:20:09'),
+(177, 5, '536', '2026-05-14 15:21:30', 'Sales', 1, 'Bill #DM067 - Sale Revenue', 0.00, 1790.00, 0.00, 0, '2026-05-14 15:21:29', '2026-05-14 15:21:29'),
+(178, 5, '536', '2026-05-14 15:21:30', 'Cash', 0, 'Bill #DM067 - Cash Payment', 1790.00, 0.00, 0.00, 0, '2026-05-14 15:21:29', '2026-05-14 15:21:29'),
+(179, 5, '537', '2026-05-14 15:23:48', 'Sales', 1, 'Bill #DM068 - Sale Revenue', 0.00, 3635.00, 0.00, 0, '2026-05-14 15:23:48', '2026-05-14 15:23:48'),
+(180, 5, '538', '2026-05-14 15:27:15', 'Sales', 1, 'Bill #DM069 - Sale Revenue', 0.00, 1235.00, 0.00, 0, '2026-05-14 15:27:15', '2026-05-14 15:27:15'),
+(181, 5, '539', '2026-05-14 15:29:45', 'Sales', 1, 'Bill #DM070 - Sale Revenue', 0.00, 3045.00, 0.00, 0, '2026-05-14 15:29:44', '2026-05-14 15:29:44'),
+(182, 5, '539', '2026-05-14 15:29:45', 'Cash', 0, 'Bill #DM070 - Cash Payment', 3045.00, 0.00, 0.00, 0, '2026-05-14 15:29:44', '2026-05-14 15:29:44'),
+(183, 5, '540', '2026-05-14 15:36:09', 'Sales', 1, 'Bill #DM071 - Sale Revenue', 0.00, 760.00, 0.00, 0, '2026-05-14 15:36:08', '2026-05-14 15:36:08'),
+(184, 5, '540', '2026-05-14 15:36:09', 'Cash', 0, 'Bill #DM071 - Cash Payment', 760.00, 0.00, 0.00, 0, '2026-05-14 15:36:08', '2026-05-14 15:36:08'),
+(185, 5, '541', '2026-05-14 15:38:49', 'Sales', 1, 'Bill #DM072 - Sale Revenue', 0.00, 470.00, 0.00, 0, '2026-05-14 15:38:49', '2026-05-14 15:38:49'),
+(186, 5, '541', '2026-05-14 15:38:49', 'Cash', 0, 'Bill #DM072 - Cash Payment', 470.00, 0.00, 0.00, 0, '2026-05-14 15:38:49', '2026-05-14 15:38:49'),
+(187, 5, '542', '2026-05-14 15:39:18', 'Sales', 1, 'Bill #DM073 - Sale Revenue', 0.00, 160.00, 0.00, 0, '2026-05-14 15:39:18', '2026-05-14 15:39:18'),
+(188, 5, '542', '2026-05-14 15:39:18', 'Cash', 0, 'Bill #DM073 - Cash Payment', 160.00, 0.00, 0.00, 0, '2026-05-14 15:39:18', '2026-05-14 15:39:18'),
+(189, 5, '543', '2026-05-14 15:44:26', 'Sales', 1, 'Bill #DM074 - Sale Revenue', 0.00, 2690.00, 0.00, 0, '2026-05-14 15:44:25', '2026-05-14 15:44:25'),
+(190, 5, '543', '2026-05-14 15:44:26', 'Cash', 0, 'Bill #DM074 - Cash Payment', 2690.00, 0.00, 0.00, 0, '2026-05-14 15:44:25', '2026-05-14 15:44:25'),
+(191, 5, '544', '2026-05-14 15:51:19', 'Sales', 1, 'Bill #DM075 - Sale Revenue', 0.00, 830.00, 0.00, 0, '2026-05-14 15:51:19', '2026-05-14 15:51:19');
 
 -- --------------------------------------------------------
 
@@ -2602,8 +2760,8 @@ CREATE TABLE IF NOT EXISTS `loyalty_members` (
 --
 
 INSERT INTO `loyalty_members` (`id`, `shop_id`, `customer_id`, `loyalty_code`, `tier_name`, `points_balance`, `lifetime_points`, `status`, `enrolled_on`, `updated_at`) VALUES
-(1, 5, 23, 'LOY-5-23', 'Basic', 80, 80, 'active', '2026-05-12 07:01:05', '2026-05-12 08:30:27'),
-(2, 5, 24, 'LOY-5-24', 'Basic', 176, 476, 'active', '2026-05-12 07:10:58', '2026-05-12 11:31:17');
+(1, 5, 23, 'LOY-5-23', 'Basic', 546, 546, 'active', '2026-05-12 07:01:05', '2026-05-14 08:51:19'),
+(2, 5, 24, 'LOY-5-24', 'Basic', 560, 860, 'active', '2026-05-12 07:10:58', '2026-05-14 08:44:25');
 
 -- --------------------------------------------------------
 
@@ -2636,10 +2794,10 @@ CREATE TABLE IF NOT EXISTS `loyalty_member_programs` (
 --
 
 INSERT INTO `loyalty_member_programs` (`id`, `shop_id`, `program_id`, `member_id`, `points_balance`, `lifetime_points`, `status`, `enrolled_on`, `last_activity_at`, `expires_at`, `updated_at`) VALUES
-(1, 5, 1, 2, 167, 467, 'active', '2026-05-12 08:27:27', '2026-05-12 11:31:17', '2026-11-12 18:31:17', '2026-05-12 11:31:17'),
+(1, 5, 1, 2, 551, 851, 'active', '2026-05-12 08:27:27', '2026-05-14 08:44:25', '2026-11-14 15:44:25', '2026-05-14 08:44:25'),
 (2, 5, 2, 2, 0, 0, 'active', '2026-05-12 08:27:27', NULL, '2026-11-12 15:27:27', '2026-05-12 08:27:27'),
 (3, 5, 2, 1, 0, 0, 'active', '2026-05-12 08:27:37', NULL, '2026-11-12 15:27:37', '2026-05-12 08:27:37'),
-(4, 5, 1, 1, 80, 80, 'active', '2026-05-12 08:30:27', '2026-05-12 08:30:27', '2026-11-12 15:30:27', '2026-05-12 08:30:27');
+(4, 5, 1, 1, 546, 546, 'active', '2026-05-12 08:30:27', '2026-05-14 08:51:19', '2026-11-14 15:51:19', '2026-05-14 08:51:19');
 
 -- --------------------------------------------------------
 
@@ -2666,7 +2824,7 @@ CREATE TABLE IF NOT EXISTS `loyalty_notification_queue` (
   KEY `idx_loyalty_notification_status` (`status`),
   KEY `idx_loyalty_notification_customer` (`customer_id`),
   KEY `fk_loyalty_notification_member` (`member_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `loyalty_notification_queue`
@@ -2686,7 +2844,19 @@ INSERT INTO `loyalty_notification_queue` (`id`, `shop_id`, `member_id`, `custome
 (11, 5, 2, 24, 'LINE', 'LOYALTY_REDEEMED_OFFER', 'You redeemed Songkaran_Festival using 100 points.', 'PENDING', '{\"offer_id\": 1, \"redemption_id\": 3, \"discount_value\": 50, \"transaction_id\": 10}', NULL, NULL, '2026-05-12 11:08:53'),
 (12, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 27 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 529, \"program_id\": 1, \"points_delta\": 27}', NULL, NULL, '2026-05-12 11:08:59'),
 (13, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 14 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 530, \"program_id\": 1, \"points_delta\": 14}', NULL, NULL, '2026-05-12 11:27:21'),
-(14, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 92 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 531, \"program_id\": 1, \"points_delta\": 92}', NULL, NULL, '2026-05-12 11:31:17');
+(14, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 92 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 531, \"program_id\": 1, \"points_delta\": 92}', NULL, NULL, '2026-05-12 11:31:17'),
+(15, 5, 1, 23, 'LINE', 'LOYALTY_EARNED', 'You earned 67 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 532, \"program_id\": 1, \"points_delta\": 67}', NULL, NULL, '2026-05-14 06:39:46'),
+(16, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 44 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 533, \"program_id\": 1, \"points_delta\": 44}', NULL, NULL, '2026-05-14 06:40:40'),
+(17, 5, 1, 23, 'LINE', 'LOYALTY_EARNED', 'You earned 25 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 534, \"program_id\": 1, \"points_delta\": 25}', NULL, NULL, '2026-05-14 06:47:06'),
+(18, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 76 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 535, \"program_id\": 1, \"points_delta\": 76}', NULL, NULL, '2026-05-14 08:20:09'),
+(19, 5, 1, 23, 'LINE', 'LOYALTY_EARNED', 'You earned 181 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 537, \"program_id\": 1, \"points_delta\": 181}', NULL, NULL, '2026-05-14 08:23:48'),
+(20, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 61 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 538, \"program_id\": 1, \"points_delta\": 61}', NULL, NULL, '2026-05-14 08:27:15'),
+(21, 5, 1, 23, 'LINE', 'LOYALTY_EARNED', 'You earned 152 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 539, \"program_id\": 1, \"points_delta\": 152}', NULL, NULL, '2026-05-14 08:29:44'),
+(22, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 38 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 540, \"program_id\": 1, \"points_delta\": 38}', NULL, NULL, '2026-05-14 08:36:08'),
+(23, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 23 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 541, \"program_id\": 1, \"points_delta\": 23}', NULL, NULL, '2026-05-14 08:38:49'),
+(24, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 8 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 542, \"program_id\": 1, \"points_delta\": 8}', NULL, NULL, '2026-05-14 08:39:18'),
+(25, 5, 2, 24, 'LINE', 'LOYALTY_EARNED', 'You earned 134 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 543, \"program_id\": 1, \"points_delta\": 134}', NULL, NULL, '2026-05-14 08:44:25'),
+(26, 5, 1, 23, 'LINE', 'LOYALTY_EARNED', 'You earned 41 loyalty points in Discount_Offer.', 'PENDING', '{\"bill_id\": 544, \"program_id\": 1, \"points_delta\": 41}', NULL, NULL, '2026-05-14 08:51:19');
 
 -- --------------------------------------------------------
 
@@ -2836,7 +3006,7 @@ CREATE TABLE IF NOT EXISTS `loyalty_transactions` (
   KEY `idx_loyalty_tx_member` (`member_id`),
   KEY `idx_loyalty_tx_customer` (`customer_id`),
   KEY `idx_loyalty_tx_bill` (`bill_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `loyalty_transactions`
@@ -2855,7 +3025,19 @@ INSERT INTO `loyalty_transactions` (`id`, `shop_id`, `member_id`, `customer_id`,
 (10, 5, 2, 24, 1, 1, NULL, 1, 'Songkaran_Festival', 'REDEEM', -100, 'Redeemed from POS CheckBill modal', 'system', '2026-05-12 11:08:53'),
 (11, 5, 2, 24, 1, 1, 529, NULL, NULL, 'EARN', 27, 'Bill #DM060', 'system', '2026-05-12 11:08:59'),
 (12, 5, 2, 24, 1, 1, 530, NULL, NULL, 'EARN', 14, 'Bill #DM061', 'system', '2026-05-12 11:27:21'),
-(13, 5, 2, 24, 1, 1, 531, NULL, NULL, 'EARN', 92, 'Bill #DM062', 'system', '2026-05-12 11:31:17');
+(13, 5, 2, 24, 1, 1, 531, NULL, NULL, 'EARN', 92, 'Bill #DM062', 'system', '2026-05-12 11:31:17'),
+(14, 5, 1, 23, 1, 4, 532, NULL, NULL, 'EARN', 67, 'Bill #DM063', 'system', '2026-05-14 06:39:46'),
+(15, 5, 2, 24, 1, 1, 533, NULL, NULL, 'EARN', 44, 'Bill #DM064', 'system', '2026-05-14 06:40:40'),
+(16, 5, 1, 23, 1, 4, 534, NULL, NULL, 'EARN', 25, 'Bill #DM065', 'system', '2026-05-14 06:47:06'),
+(17, 5, 2, 24, 1, 1, 535, NULL, NULL, 'EARN', 76, 'Bill #DM066', 'system', '2026-05-14 08:20:09'),
+(18, 5, 1, 23, 1, 4, 537, NULL, NULL, 'EARN', 181, 'Bill #DM068', 'system', '2026-05-14 08:23:48'),
+(19, 5, 2, 24, 1, 1, 538, NULL, NULL, 'EARN', 61, 'Bill #DM069', 'system', '2026-05-14 08:27:15'),
+(20, 5, 1, 23, 1, 4, 539, NULL, NULL, 'EARN', 152, 'Bill #DM070', 'system', '2026-05-14 08:29:44'),
+(21, 5, 2, 24, 1, 1, 540, NULL, NULL, 'EARN', 38, 'Bill #DM071', 'system', '2026-05-14 08:36:08'),
+(22, 5, 2, 24, 1, 1, 541, NULL, NULL, 'EARN', 23, 'Bill #DM072', 'system', '2026-05-14 08:38:49'),
+(23, 5, 2, 24, 1, 1, 542, NULL, NULL, 'EARN', 8, 'Bill #DM073', 'system', '2026-05-14 08:39:18'),
+(24, 5, 2, 24, 1, 1, 543, NULL, NULL, 'EARN', 134, 'Bill #DM074', 'system', '2026-05-14 08:44:25'),
+(25, 5, 1, 23, 1, 4, 544, NULL, NULL, 'EARN', 41, 'Bill #DM075', 'system', '2026-05-14 08:51:19');
 
 -- --------------------------------------------------------
 
@@ -2888,7 +3070,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_is_active` (`is_active`),
   KEY `idx_scheduled_for` (`scheduled_for`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ;
 
 --
 -- Dumping data for table `notifications`
@@ -2900,7 +3082,8 @@ INSERT INTO `notifications` (`id`, `title`, `message`, `image_url`, `image_path`
 (12, 'Buf Fixed', '- Topbar Business Date now uses setup date from `getNextSetupDate()`\n- Business Date refresh logic runs every 60 seconds to keep display in sync\n- Build workflow continues to sync `CHANGELOG.md` into `public/CHANGELOG.md`', NULL, NULL, 'announcement', 'all', NULL, NULL, 1, '2026-04-02 08:38:58', '2026-04-02 08:38:58', 1, '2026-04-03 00:00:00', NULL, 0, 'normal'),
 (13, 'Subscription Plan Upgraded', 'Your subscription package has been upgraded to Enterprise. Enjoy your new features!', NULL, NULL, '', 'specific_shops', '[5]', NULL, 1, '2026-05-13 08:28:56', '2026-05-13 08:28:56', 1, NULL, NULL, 0, 'high'),
 (14, 'Subscription Plan Upgraded', 'Your subscription package has been upgraded to Professional. Enjoy your new features!', NULL, NULL, '', 'specific_shops', '[5]', NULL, 1, '2026-05-13 08:33:55', '2026-05-13 08:33:55', 1, NULL, NULL, 0, 'high'),
-(15, 'Subscription Plan Upgraded', 'Your subscription package has been upgraded to Starter. Enjoy your new features!', NULL, NULL, '', 'specific_shops', '[9]', NULL, 1, '2026-05-13 08:38:02', '2026-05-13 08:38:02', 1, NULL, NULL, 0, 'high');
+(15, 'Subscription Plan Upgraded', 'Your subscription package has been upgraded to Starter. Enjoy your new features!', NULL, NULL, '', 'specific_shops', '[9]', NULL, 1, '2026-05-13 08:38:02', '2026-05-13 08:38:02', 1, NULL, NULL, 0, 'high'),
+(16, 'Subscription Plan Upgraded', 'Your subscription package has been upgraded to Starter. Enjoy your new features!', NULL, NULL, '', 'specific_shops', '[5]', NULL, 1, '2026-05-13 09:44:28', '2026-05-13 09:44:28', 1, NULL, NULL, 0, 'high');
 
 -- --------------------------------------------------------
 
@@ -2960,7 +3143,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `status` int NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_orders_shop_id` (`shop_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=1587 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=1620 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `orders`
@@ -3124,7 +3307,40 @@ INSERT INTO `orders` (`id`, `shop_id`, `userid`, `order_number`, `table_number`,
 (1583, 5, '18594', 78, 'VIP 1', 600.00, '2026-05-12 11:04:46', NULL, 1),
 (1584, 5, '18594', 79, 'Table 2', 775.00, '2026-05-12 11:07:10', NULL, 1),
 (1585, 5, '18594', 80, 'Table 3', 510.00, '2026-05-12 11:27:03', NULL, 1),
-(1586, 5, '18594', 81, 'VIP 2', 1840.00, '2026-05-12 11:31:00', NULL, 1);
+(1586, 5, '18594', 81, 'VIP 2', 1840.00, '2026-05-12 11:31:00', NULL, 1),
+(1587, 5, '18594', 82, 'VIP 1', 1340.00, '2026-05-14 06:39:35', NULL, 1),
+(1588, 5, '18594', 83, 'VIP 2', 2235.00, '2026-05-14 06:40:09', NULL, 1),
+(1589, 5, '18594', 84, 'VIP 3', 880.00, '2026-05-14 06:40:23', NULL, 1),
+(1590, 5, '18594', 85, 'VIP 3', 1135.00, '2026-05-14 06:46:32', NULL, 1),
+(1591, 5, '18594', 86, 'VIP 1', 520.00, '2026-05-14 06:57:07', NULL, 1),
+(1592, 5, '18594', 87, 'Table 3', 970.00, '2026-05-14 07:04:39', NULL, 1),
+(1593, 5, '18594', 88, 'Table 1', 1500.00, '2026-05-14 07:10:24', NULL, 1),
+(1594, 5, '18594', 89, 'VIP 1', 760.00, '2026-05-14 07:10:56', NULL, 1),
+(1595, 5, '18594', 90, 'Table 3', 550.00, '2026-05-14 07:56:16', NULL, 1),
+(1596, 5, '18594', 91, 'Table 3', 560.00, '2026-05-14 07:56:29', NULL, 1),
+(1597, 5, '18594', 92, 'Table 1', 290.00, '2026-05-14 07:56:43', NULL, 1),
+(1598, 5, '18594', 93, 'VIP 1', 460.00, '2026-05-14 08:03:02', NULL, 1),
+(1599, 5, '18594', 94, 'VIP 1', 310.00, '2026-05-14 08:06:22', NULL, 1),
+(1600, 5, '18594', 95, 'VIP 1', 435.00, '2026-05-14 08:07:07', NULL, 1),
+(1601, 5, '18594', 96, 'Table 3', 60.00, '2026-05-14 08:08:07', NULL, 1),
+(1602, 5, '18594', 97, 'VIP 2', 190.00, '2026-05-14 08:08:22', NULL, 1),
+(1603, 5, '18594', 98, 'VIP 2', 430.00, '2026-05-14 08:09:55', NULL, 1),
+(1604, 5, '18594', 99, 'VIP 2', 190.00, '2026-05-14 08:10:04', NULL, 1),
+(1605, 5, '18594', 100, 'VIP 3', 190.00, '2026-05-14 08:10:21', NULL, 1),
+(1606, 5, '18594', 101, 'VIP 3', 210.00, '2026-05-14 08:11:39', NULL, 1),
+(1607, 5, '18594', 102, 'Table 2', 340.00, '2026-05-14 08:11:55', NULL, 1),
+(1608, 5, '18594', 103, 'Table 2', 120.00, '2026-05-14 08:13:27', NULL, 1),
+(1609, 5, '18594', 102, 'VIP 1', 280.00, '2026-05-14 08:13:39', NULL, 1),
+(1610, 5, '18594', 104, 'VIP 1', 190.00, '2026-05-14 08:14:44', NULL, 1),
+(1611, 5, '18594', 105, 'VIP 1', 330.00, '2026-05-14 08:15:05', NULL, 1),
+(1612, 5, '18594', 106, 'Table 3', 280.00, '2026-05-14 08:18:43', NULL, 1),
+(1613, 5, '18594', 106, 'VIP 1', 350.00, '2026-05-14 08:18:59', NULL, 1),
+(1614, 5, '18594', 107, 'Table 3', 270.00, '2026-05-14 08:19:36', NULL, 1),
+(1615, 5, '18594', 108, 'Table 1', 310.00, '2026-05-14 08:22:11', NULL, 1),
+(1616, 5, '18594', 109, 'Table 2', 760.00, '2026-05-14 08:32:00', NULL, 1),
+(1617, 5, '18594', 110, 'VIP 2', 470.00, '2026-05-14 08:37:04', NULL, 1),
+(1618, 5, '18594', 111, 'VIP 1', 830.00, '2026-05-14 08:37:14', NULL, 1),
+(1619, 5, '18594', 112, 'VIP 3', 160.00, '2026-05-14 08:39:10', NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -3153,7 +3369,7 @@ CREATE TABLE IF NOT EXISTS `order_items` (
   KEY `order_id` (`order_id`),
   KEY `idx_table_cat_id` (`table_cat_id`),
   KEY `idx_order_items_shop_id` (`shop_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2813 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2923 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `order_items`
@@ -3514,13 +3730,13 @@ INSERT INTO `order_items` (`id`, `shop_id`, `order_id`, `table_number`, `item_na
 (2794, 5, 78, 'VIP 1', 'Lunch 2', NULL, 1, 230.00, '2026-05-12 11:04:46', 'DM060', 0, '2026-04-05', 10, NULL, NULL),
 (2795, 5, 78, 'VIP 1', 'Lunch 1', NULL, 1, 250.00, '2026-05-12 11:04:46', 'DM060', 0, '2026-04-05', 10, NULL, NULL),
 (2796, 5, 78, 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1, 120.00, '2026-05-12 11:04:46', 'DM060', 0, '2026-04-05', 10, NULL, NULL),
-(2797, 5, 79, 'Table 2', 'Coffee2', NULL, 1, 130.00, '2026-05-12 11:07:10', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2798, 5, 79, 'Table 2', 'Snack 2', NULL, 1, 50.00, '2026-05-12 11:07:10', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2799, 5, 79, 'Table 2', 'Snack 3', NULL, 1, 195.00, '2026-05-12 11:07:10', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2800, 5, 79, 'Table 2', 'Coffee4', NULL, 1, 150.00, '2026-05-12 11:07:10', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2801, 5, 79, 'Table 2', 'Lunch 1', NULL, 1, 250.00, '2026-05-12 11:07:10', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2802, 5, 80, 'Table 3', 'Coffee3', NULL, 1, 60.00, '2026-05-12 11:27:03', NULL, 1, '2026-04-05', 10, NULL, NULL),
-(2803, 5, 80, 'Table 3', 'Coffee4', NULL, 3, 450.00, '2026-05-12 11:27:03', NULL, 1, '2026-04-05', 10, NULL, NULL),
+(2797, 5, 79, 'Table 2', 'Coffee2', NULL, 1, 130.00, '2026-05-12 11:07:10', 'DM069', 0, '2026-04-05', 10, NULL, NULL),
+(2798, 5, 79, 'Table 2', 'Snack 2', NULL, 1, 50.00, '2026-05-12 11:07:10', 'DM069', 0, '2026-04-05', 10, NULL, NULL),
+(2799, 5, 79, 'Table 2', 'Snack 3', NULL, 1, 195.00, '2026-05-12 11:07:10', 'DM069', 0, '2026-04-05', 10, NULL, NULL),
+(2800, 5, 79, 'Table 2', 'Coffee4', NULL, 1, 150.00, '2026-05-12 11:07:10', 'DM069', 0, '2026-04-05', 10, NULL, NULL),
+(2801, 5, 79, 'Table 2', 'Lunch 1', NULL, 1, 250.00, '2026-05-12 11:07:10', 'DM069', 0, '2026-04-05', 10, NULL, NULL),
+(2802, 5, 80, 'Table 3', 'Coffee3', NULL, 1, 60.00, '2026-05-12 11:27:03', 'DM065', 0, '2026-04-05', 10, NULL, NULL),
+(2803, 5, 80, 'Table 3', 'Coffee4', NULL, 3, 450.00, '2026-05-12 11:27:03', 'DM065', 0, '2026-04-05', 10, NULL, NULL),
 (2804, 5, 81, 'VIP 2', 'Coffee3', NULL, 2, 120.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
 (2805, 5, 81, 'VIP 2', 'Coffee4', NULL, 2, 300.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
 (2806, 5, 81, 'VIP 2', 'Lunch 1', NULL, 1, 250.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
@@ -3529,7 +3745,118 @@ INSERT INTO `order_items` (`id`, `shop_id`, `order_id`, `table_number`, `item_na
 (2809, 5, 81, 'VIP 2', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
 (2810, 5, 81, 'VIP 2', 'Snack 1', NULL, 1, 50.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
 (2811, 5, 81, 'VIP 2', 'Lunch 3', NULL, 2, 560.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
-(2812, 5, 81, 'VIP 2', 'LAYS', NULL, 2, 50.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL);
+(2812, 5, 81, 'VIP 2', 'LAYS', NULL, 2, 50.00, '2026-05-12 11:31:00', 'DM062', 0, '2026-04-05', 10, NULL, NULL),
+(2813, 5, 82, 'VIP 1', 'Coffee2', NULL, 2, 260.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2814, 5, 82, 'VIP 1', 'Coffee3', NULL, 2, 120.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2815, 5, 82, 'VIP 1', 'Coffee4', NULL, 2, 300.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2816, 5, 82, 'VIP 1', 'Snack 2', NULL, 1, 50.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2817, 5, 82, 'VIP 1', 'Snack 1', NULL, 1, 50.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2818, 5, 82, 'VIP 1', 'Lunch 3', NULL, 2, 560.00, '2026-05-14 06:39:35', 'DM063', 0, '2026-04-05', 10, NULL, NULL),
+(2819, 5, 83, 'VIP 2', 'Coffee3', NULL, 1, 60.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2820, 5, 83, 'VIP 2', 'Coffee4', NULL, 1, 150.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2821, 5, 83, 'VIP 2', 'Snack 3', NULL, 1, 195.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2822, 5, 83, 'VIP 2', 'Snack 2', NULL, 1, 50.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2823, 5, 83, 'VIP 2', 'Snack 1', NULL, 1, 50.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2824, 5, 83, 'VIP 2', 'มีเมนูแนะนำไหม', NULL, 4, 480.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2825, 5, 83, 'VIP 2', 'Lunch 1', NULL, 5, 1250.00, '2026-05-14 06:40:09', 'DM070', 0, '2026-04-05', 10, NULL, NULL),
+(2826, 5, 84, 'VIP 3', 'LAYS', NULL, 1, 25.00, '2026-05-14 06:40:23', 'DM064', 0, '2026-04-05', 10, NULL, NULL),
+(2827, 5, 84, 'VIP 3', 'Lunch 3', NULL, 2, 560.00, '2026-05-14 06:40:23', 'DM064', 0, '2026-04-05', 10, NULL, NULL),
+(2828, 5, 84, 'VIP 3', 'Snack 1', NULL, 1, 50.00, '2026-05-14 06:40:23', 'DM064', 0, '2026-04-05', 10, NULL, NULL),
+(2829, 5, 84, 'VIP 3', 'Snack 2', NULL, 1, 50.00, '2026-05-14 06:40:23', 'DM064', 0, '2026-04-05', 10, NULL, NULL),
+(2830, 5, 84, 'VIP 3', 'Snack 3', NULL, 1, 195.00, '2026-05-14 06:40:23', 'DM064', 0, '2026-04-05', 10, NULL, NULL),
+(2831, 5, 85, 'VIP 3', 'Coffee2', NULL, 1, 130.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2832, 5, 85, 'VIP 3', 'Snack 1', NULL, 1, 50.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2833, 5, 85, 'VIP 3', 'Snack 2', NULL, 1, 50.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2834, 5, 85, 'VIP 3', 'Snack 3', NULL, 1, 195.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2835, 5, 85, 'VIP 3', 'Coffee4', NULL, 1, 150.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2836, 5, 85, 'VIP 3', 'Lunch 3', NULL, 2, 560.00, '2026-05-14 06:46:32', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2837, 5, 86, 'VIP 1', 'Coffee1', NULL, 1, 120.00, '2026-05-14 06:57:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2838, 5, 86, 'VIP 1', 'Coffee2', NULL, 1, 130.00, '2026-05-14 06:57:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2839, 5, 86, 'VIP 1', 'Coffee3', NULL, 1, 60.00, '2026-05-14 06:57:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2840, 5, 86, 'VIP 1', 'Snack 2', NULL, 1, 50.00, '2026-05-14 06:57:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2841, 5, 86, 'VIP 1', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-14 06:57:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2842, 5, 87, 'Table 3', 'Coffee1', NULL, 2, 240.00, '2026-05-14 07:04:39', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2843, 5, 87, 'Table 3', 'Snack 2', NULL, 2, 100.00, '2026-05-14 07:04:39', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2844, 5, 87, 'Table 3', 'Coffee4', NULL, 1, 150.00, '2026-05-14 07:04:39', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2845, 5, 87, 'Table 3', 'Lunch 1', NULL, 1, 250.00, '2026-05-14 07:04:39', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2846, 5, 87, 'Table 3', 'Lunch 2', NULL, 1, 230.00, '2026-05-14 07:04:39', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2847, 5, 88, 'Table 1', 'Coffee4', NULL, 2, 300.00, '2026-05-14 07:10:24', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2848, 5, 88, 'Table 1', 'Lunch 1', NULL, 3, 750.00, '2026-05-14 07:10:24', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2849, 5, 88, 'Table 1', 'Coffee3', NULL, 1, 60.00, '2026-05-14 07:10:24', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2850, 5, 88, 'Table 1', 'Snack 3', NULL, 2, 390.00, '2026-05-14 07:10:24', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2851, 5, 89, 'VIP 1', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-14 07:10:56', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2852, 5, 89, 'VIP 1', 'Lunch 1', NULL, 1, 250.00, '2026-05-14 07:10:56', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2853, 5, 89, 'VIP 1', 'Lunch 2', NULL, 1, 230.00, '2026-05-14 07:10:56', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2854, 5, 89, 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1, 120.00, '2026-05-14 07:10:56', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2855, 5, 90, 'Table 3', 'Coffee1', NULL, 1, 120.00, '2026-05-14 07:56:16', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2856, 5, 90, 'Table 3', 'Coffee2', NULL, 2, 260.00, '2026-05-14 07:56:16', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2857, 5, 90, 'Table 3', 'Coffee3', NULL, 2, 120.00, '2026-05-14 07:56:16', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2858, 5, 90, 'Table 3', 'Snack 2', NULL, 1, 50.00, '2026-05-14 07:56:16', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2859, 5, 91, 'Table 3', 'มีเมนูแนะนำไหม', NULL, 2, 240.00, '2026-05-14 07:56:30', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2860, 5, 91, 'Table 3', 'เมนูแนะนำ', NULL, 2, 320.00, '2026-05-14 07:56:30', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2861, 5, 92, 'Table 1', 'Coffee3', NULL, 1, 60.00, '2026-05-14 07:56:43', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2862, 5, 92, 'Table 1', 'Coffee2', NULL, 1, 130.00, '2026-05-14 07:56:43', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2863, 5, 92, 'Table 1', 'Snack 1', NULL, 1, 50.00, '2026-05-14 07:56:43', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2864, 5, 92, 'Table 1', 'Snack 2', NULL, 1, 50.00, '2026-05-14 07:56:43', 'DM067', 0, '2026-04-05', 10, NULL, NULL),
+(2865, 5, 93, 'VIP 1', 'Coffee1', 'Food', 1, 120.00, '2026-05-14 08:03:02', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2866, 5, 93, 'VIP 1', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:03:02', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2867, 5, 93, 'VIP 1', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:03:02', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2868, 5, 93, 'VIP 1', 'Coffee4', 'Food', 1, 150.00, '2026-05-14 08:03:02', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2869, 5, 94, 'VIP 1', 'Coffee1', 'Food', 1, 120.00, '2026-05-14 08:06:22', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2870, 5, 94, 'VIP 1', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:06:22', 'DM068', 0, '2026-04-05', 10, 47, 78);
+INSERT INTO `order_items` (`id`, `shop_id`, `order_id`, `table_number`, `item_name`, `item_group`, `quantity`, `total_price`, `created_at`, `invoice_number`, `status`, `setup_date`, `table_cat_id`, `catid`, `subcatid`) VALUES
+(2871, 5, 94, 'VIP 1', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:06:22', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2872, 5, 95, 'VIP 1', 'Coffee2', NULL, 1, 130.00, '2026-05-14 08:07:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2873, 5, 95, 'VIP 1', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:07:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2874, 5, 95, 'VIP 1', 'Snack 2', NULL, 1, 50.00, '2026-05-14 08:07:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2875, 5, 95, 'VIP 1', 'Snack 3', NULL, 1, 195.00, '2026-05-14 08:07:07', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2876, 5, 96, 'Table 3', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:08:07', 'DM074', 0, '2026-04-05', 10, NULL, NULL),
+(2877, 5, 97, 'VIP 2', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:08:22', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2878, 5, 97, 'VIP 2', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:08:22', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2879, 5, 98, 'VIP 2', 'มีเมนูแนะนำไหม', 'Food', 1, 120.00, '2026-05-14 08:09:55', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2880, 5, 98, 'VIP 2', 'เมนูแนะนำ', 'Food', 1, 160.00, '2026-05-14 08:09:55', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2881, 5, 98, 'VIP 2', 'Coffee4', 'Food', 1, 150.00, '2026-05-14 08:09:55', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2882, 5, 99, 'VIP 2', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:10:04', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2883, 5, 99, 'VIP 2', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:10:04', 'DM070', 0, '2026-04-05', 10, 47, 78),
+(2884, 5, 100, 'VIP 3', 'Coffee2', NULL, 1, 130.00, '2026-05-14 08:10:21', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2885, 5, 100, 'VIP 3', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:10:21', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2886, 5, 101, 'VIP 3', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:11:39', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2887, 5, 101, 'VIP 3', 'Coffee4', NULL, 1, 150.00, '2026-05-14 08:11:39', 'DM066', 0, '2026-04-05', 10, NULL, NULL),
+(2888, 5, 102, 'Table 2', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:11:55', 'DM069', 0, '2026-04-05', 10, 47, 78),
+(2889, 5, 102, 'Table 2', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:11:55', 'DM069', 0, '2026-04-05', 10, 47, 78),
+(2890, 5, 102, 'Table 2', 'Coffee4', 'Food', 1, 150.00, '2026-05-14 08:11:55', 'DM069', 0, '2026-04-05', 10, 47, 78),
+(2891, 5, 103, 'Table 2', 'มีเมนูแนะนำไหม', 'Food', 1, 120.00, '2026-05-14 08:13:27', 'DM069', 0, '2026-04-05', 10, 47, 78),
+(2892, 5, 102, 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1, 120.00, '2026-05-14 08:13:39', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2893, 5, 102, 'VIP 1', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-14 08:13:39', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2894, 5, 104, 'VIP 1', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:14:44', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2895, 5, 104, 'VIP 1', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:14:44', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2896, 5, 105, 'VIP 1', 'Coffee4', 'Food', 1, 150.00, '2026-05-14 08:15:05', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2897, 5, 105, 'VIP 1', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:15:05', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2898, 5, 105, 'VIP 1', 'มีเมนูแนะนำไหม', 'Food', 1, 120.00, '2026-05-14 08:15:05', 'DM068', 0, '2026-04-05', 10, 47, 78),
+(2899, 5, 106, 'Table 3', 'มีเมนูแนะนำไหม', 'Food', 1, 120.00, '2026-05-14 08:18:43', 'DM074', 0, '2026-04-05', 10, 47, 78),
+(2900, 5, 106, 'Table 3', 'เมนูแนะนำ', 'Food', 1, 160.00, '2026-05-14 08:18:43', 'DM074', 0, '2026-04-05', 10, 47, 78),
+(2901, 5, 106, 'VIP 1', 'Lunch 2', NULL, 1, 230.00, '2026-05-14 08:18:59', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2902, 5, 106, 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 1, 120.00, '2026-05-14 08:18:59', 'DM068', 0, '2026-04-05', 10, NULL, NULL),
+(2903, 5, 107, 'Table 3', 'มีเมนูแนะนำไหม', 'Food', 1, 120.00, '2026-05-14 08:19:36', 'DM074', 0, '2026-04-05', 10, 47, 78),
+(2904, 5, 107, 'Table 3', 'Coffee4', 'Food', 1, 150.00, '2026-05-14 08:19:36', 'DM074', 0, '2026-04-05', 10, 47, 78),
+(2905, 5, 108, 'Table 1', 'Coffee2', 'Food', 1, 130.00, '2026-05-14 08:22:11', NULL, 1, '2026-04-05', 10, 47, 78),
+(2906, 5, 108, 'Table 1', 'Coffee3', 'Food', 1, 60.00, '2026-05-14 08:22:11', NULL, 1, '2026-04-05', 10, 47, 78),
+(2907, 5, 108, 'Table 1', 'Coffee1', 'Food', 1, 120.00, '2026-05-14 08:22:11', NULL, 1, '2026-04-05', 10, 47, 78),
+(2908, 5, 109, 'Table 2', 'มีเมนูแนะนำไหม', NULL, 1, 120.00, '2026-05-14 08:32:00', 'DM071', 0, '2026-04-05', 10, NULL, NULL),
+(2909, 5, 109, 'Table 2', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-14 08:32:00', 'DM071', 0, '2026-04-05', 10, NULL, NULL),
+(2910, 5, 109, 'Table 2', 'Lunch 1', NULL, 1, 250.00, '2026-05-14 08:32:00', 'DM071', 0, '2026-04-05', 10, NULL, NULL),
+(2911, 5, 109, 'Table 2', 'Lunch 2', NULL, 1, 230.00, '2026-05-14 08:32:00', 'DM071', 0, '2026-04-05', 10, NULL, NULL),
+(2912, 5, 110, 'VIP 2', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:37:04', 'DM072', 0, '2026-04-05', 10, NULL, NULL),
+(2913, 5, 110, 'VIP 2', 'เมนูแนะนำ', NULL, 1, 160.00, '2026-05-14 08:37:04', 'DM072', 0, '2026-04-05', 10, NULL, NULL),
+(2914, 5, 110, 'VIP 2', 'Lunch 1', NULL, 1, 250.00, '2026-05-14 08:37:04', 'DM072', 0, '2026-04-05', 10, NULL, NULL),
+(2915, 5, 111, 'VIP 1', 'มีเมนูแนะนำไหม', NULL, 2, 240.00, '2026-05-14 08:37:14', 'DM075', 0, '2026-04-05', 10, NULL, NULL),
+(2916, 5, 111, 'VIP 1', 'เมนูแนะนำ', NULL, 2, 320.00, '2026-05-14 08:37:14', 'DM075', 0, '2026-04-05', 10, NULL, NULL),
+(2917, 5, 111, 'VIP 1', 'Snack 3', NULL, 1, 195.00, '2026-05-14 08:37:14', 'DM075', 0, '2026-04-05', 10, NULL, NULL),
+(2918, 5, 111, 'VIP 1', 'LAYS', NULL, 1, 25.00, '2026-05-14 08:37:14', 'DM075', 0, '2026-04-05', 10, NULL, NULL),
+(2919, 5, 111, 'VIP 1', 'Snack 1', NULL, 1, 50.00, '2026-05-14 08:37:14', 'DM075', 0, '2026-04-05', 10, NULL, NULL),
+(2920, 5, 112, 'VIP 3', 'Snack 1', NULL, 1, 50.00, '2026-05-14 08:39:10', 'DM073', 0, '2026-04-05', 10, NULL, NULL),
+(2921, 5, 112, 'VIP 3', 'Snack 2', NULL, 1, 50.00, '2026-05-14 08:39:10', 'DM073', 0, '2026-04-05', 10, NULL, NULL),
+(2922, 5, 112, 'VIP 3', 'Coffee3', NULL, 1, 60.00, '2026-05-14 08:39:10', 'DM073', 0, '2026-04-05', 10, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -4398,7 +4725,7 @@ CREATE TABLE IF NOT EXISTS `shops` (
 
 INSERT INTO `shops` (`id`, `name`, `shop_code`, `bill_prefix`, `tax_id`, `phone_number`, `email`, `address`, `city`, `state`, `zip_code`, `country`, `website`, `logo`, `logo_type`, `logo_name`, `contact_person`, `contact_person_phone`, `subscription_status`, `subscription_plan_id`, `subscription_start_date`, `subscription_end_date`, `no_of_terminals`, `max_users`, `storage_quota_gb`, `database_prefix`, `is_active`, `created_at`, `updated_at`, `created_by`, `updated_by`) VALUES
 (4, 'Cloud7', 'CLD0001', 'CLD', '4525545465', '+6698653256', 'cloud7@gmail.com', 'Sout Pataya Chonburi', 'Pattaya', 'chonburi', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'active', 2, '2026-03-27 16:55:23', '2027-03-27 16:55:23', 1, 10, 50, NULL, 1, '2026-03-27 09:55:23', '2026-03-27 09:55:37', 1, 1),
-(5, 'Demo Restaurant', 'Demo0001', 'DM', '12345678930', '+661234567898', 'demo@gmail.com', '125/56,Near Demo,Demo City China ', 'Demo', 'Demo', '20150', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'active', 2, '2026-03-28 19:32:43', '2027-03-28 19:32:43', 1, 10, 50, NULL, 1, '2026-03-28 19:32:43', '2026-05-13 08:33:55', 1, 1),
+(5, 'Demo Restaurant', 'Demo0001', 'DM', '12345678930', '+661234567898', 'demo@gmail.com', '125/56,Near Demo,Demo City China ', 'Demo', 'Demo', '20150', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'active', 1, '2026-03-28 19:32:43', '2027-03-28 19:32:43', 1, 10, 50, NULL, 1, '2026-03-28 19:32:43', '2026-05-13 09:44:28', 1, 1),
 (7, 'JASLEEN RESTAURANT', 'JSL0001', 'JSL', 'xxxxxxxxxxxxx', '+66 84 848 6868', 'info@jasleenindianfood.com', '100 21 Soi Kamala 12, Kamala Kathu District, Phuket 83150, Thailand', NULL, NULL, '83150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'trial', 1, '2026-03-29 05:14:44', '2027-03-29 05:14:44', 1, 10, 50, NULL, 1, '2026-03-29 05:14:44', '2026-03-29 05:14:44', 1, NULL),
 (8, 'SUNRISE CAFE & RESTAURANT', 'SNR001', 'SNR', 'XXXXXXXX', '+66-805401625', 'rajkirthwal@outlook.com', '31/3 Sukhumvit Soi 48 Phra Khanong Khlong Toei Bangkok', 'Bangkok', 'Bangkok', '10110', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'active', 1, '2026-04-02 08:21:56', '2027-04-02 08:21:56', 1, 10, 50, NULL, 1, '2026-04-02 08:21:56', '2026-05-08 07:23:14', 1, 1),
 (9, 'WELCOME SUIT', 'WS0001', 'WS', '0205565021365', '+66-800062602', 'welcomesuit@gmail.com', '249/29-30 Moo 10, Muang Pattaya, Bang Lamung District, Chon Buri 20150', 'Pattaya', 'Chonburi', '20150', 'Thailand', NULL, NULL, NULL, NULL, NULL, NULL, 'active', 1, '2026-04-13 06:32:41', '2027-04-13 06:32:41', 1, 10, 50, NULL, 1, '2026-04-13 06:32:41', '2026-05-13 08:38:02', 1, 1);
@@ -4763,16 +5090,16 @@ CREATE TABLE IF NOT EXISTS `subscription_plans` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_tier_level` (`tier_level`),
   KEY `idx_visible` (`visible_to_customers`,`is_active`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 --
 -- Dumping data for table `subscription_plans`
 --
 
 INSERT INTO `subscription_plans` (`id`, `name`, `description`, `price_per_month`, `quarterly_price`, `yearly_price`, `max_terminals`, `max_users`, `storage_quota_gb`, `setup_fee`, `features`, `payment_methods_allowed`, `support_level`, `trial_days`, `cancellation_policy`, `billing_cycle`, `is_active`, `visible_to_customers`, `tier_level`, `discount_percentage`, `max_discount_amount`, `refund_policy_days`, `min_contract_months`, `created_at`, `updated_at`) VALUES
-(1, 'Starter', 'Perfect for small restaurants', 500.00, 1350.00, 4800.00, 1, 5, 10, 0.00, '[\"POS\", \"Basic Reports\", \"Customer Management\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'BASIC', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 0, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-03-26 18:12:33'),
-(2, 'Professional', 'For growing restaurants', 1500.00, 4050.00, 14400.00, 3, 15, 50, 0.00, '[\"POS\", \"Advanced Reports\", \"Customer Management\", \"Inventory\", \"Staff Management\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'STANDARD', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 1, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-03-26 18:12:33'),
-(3, 'Enterprise', 'For large restaurant chains', 2500.00, 6750.00, 24000.00, 10, 50, 200, 0.00, '[\"POS\", \"Advanced Reports\", \"Customer Management\", \"Inventory\", \"Staff Management\", \"Multi-location\", \"API Access\", \"Custom Integration\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'PREMIUM', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 2, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-03-26 18:12:33');
+(1, 'Starter', 'Perfect for small restaurants', 500.00, 1500.00, 5000.00, 1, 5, 10, 0.00, '[\"POS\", \"Basic Reports\", \"Customer Management\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'BASIC', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 0, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-05-13 09:40:17'),
+(2, 'Professional', 'For growing restaurants', 1000.00, 3000.00, 11000.00, 3, 15, 50, 0.00, '[\"POS\", \"Advanced Reports\", \"Customer Management\", \"Inventory\", \"Staff Management\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'STANDARD', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 1, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-05-13 09:40:22'),
+(3, 'Enterprise', 'For large restaurant chains', 1500.00, 4500.00, 15000.00, 10, 50, 200, 0.00, '[\"POS\", \"Advanced Reports\", \"Customer Management\", \"Inventory\", \"Staff Management\", \"Multi-location\", \"API Access\", \"Custom Integration\"]', '[\"CREDIT_CARD\", \"BANK_TRANSFER\", \"UPI\"]', 'PREMIUM', 14, 'Plans can be cancelled anytime. Refund policy applies as per the plan terms.', 'MONTHLY', 1, 1, 2, 0.00, NULL, 30, 1, '2026-03-26 09:01:56', '2026-05-13 09:40:30');
 
 -- --------------------------------------------------------
 
@@ -4784,7 +5111,7 @@ DROP TABLE IF EXISTS `super_admin_users`;
 CREATE TABLE IF NOT EXISTS `super_admin_users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `first_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `last_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -4815,7 +5142,7 @@ CREATE TABLE IF NOT EXISTS `super_admin_users` (
 --
 
 INSERT INTO `super_admin_users` (`id`, `username`, `email`, `password_hash`, `first_name`, `last_name`, `phone_number`, `role`, `shop_id`, `permissions`, `profile_image`, `profile_image_type`, `is_active`, `last_login`, `login_attempts`, `account_locked_until`, `created_at`, `updated_at`) VALUES
-(1, 'superadmin', 'admin@chefmate.com', '$2a$10$5YtvKgzmni/oqLJwG59yZe6DeyRgYZd5z8jmpLdnNZygy7r.q7gp2', 'Super', 'Admin', '+66-839194134', 'super_admin', NULL, NULL, NULL, NULL, 1, '2026-05-13 16:07:05', 0, NULL, '2026-03-26 09:21:01', '2026-05-13 09:07:05'),
+(1, 'superadmin', 'admin@chefmate.com', '$2a$10$5YtvKgzmni/oqLJwG59yZe6DeyRgYZd5z8jmpLdnNZygy7r.q7gp2', 'Super', 'Admin', '+66-839194134', 'super_admin', NULL, NULL, NULL, NULL, 1, '2026-05-13 19:20:59', 0, NULL, '2026-03-26 09:21:01', '2026-05-13 12:20:59'),
 (2, 'view1', 'view1@gmail.com', '$2a$10$yH9lmkLcTdM46EwcKc9tx.epn.3J81.sNNbKTRVZRJgJbWjmZvahm', 'bjbk', 'nbjj', NULL, 'admin', NULL, NULL, NULL, NULL, 1, NULL, 0, NULL, '2026-03-26 11:15:40', '2026-03-26 11:15:40');
 
 -- --------------------------------------------------------
@@ -4945,7 +5272,7 @@ CREATE TABLE IF NOT EXISTS `support_tickets` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_shop_status` (`shop_id`,`status`,`created_at`),
   KEY `error_log_id` (`error_log_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Support tickets for shop issues';
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Support tickets for shop issues';
 
 --
 -- Dumping data for table `support_tickets`
@@ -4953,7 +5280,8 @@ CREATE TABLE IF NOT EXISTS `support_tickets` (
 
 INSERT INTO `support_tickets` (`id`, `shop_id`, `ticket_number`, `user_id`, `assigned_to`, `category`, `subject`, `description`, `priority`, `status`, `error_log_id`, `notes`, `resolution`, `created_by`, `created_at`, `updated_at`, `resolved_at`) VALUES
 (4, 5, 'TICKET-5-20260411-4235', 180, NULL, 'BILLING', 'fdf', 'dsfdsfds', 'MEDIUM', 'CLOSED', NULL, 'ddsadsad', 'We will closed the ticket as issue resolved already', NULL, '2026-04-11 06:35:54', '2026-04-11 07:18:04', '2026-04-11 07:18:04'),
-(5, 8, 'TICKET-8-20260412-1082', NULL, NULL, 'TECHNICAL', 'Blank Screen', 'After cashier login show blank screen using app and browser', 'MEDIUM', 'OPEN', NULL, NULL, NULL, 1, '2026-04-12 04:25:51', '2026-04-12 04:25:51', NULL);
+(5, 8, 'TICKET-8-20260412-1082', NULL, 1, 'TECHNICAL', 'Blank Screen', 'After cashier login show blank screen using app and browser', 'URGENT', 'IN_PROGRESS', NULL, NULL, NULL, 1, '2026-04-12 04:25:51', '2026-05-13 12:23:03', NULL),
+(6, 5, 'TICKET-5-20260513-5383', 181, 1, 'TECHNICAL', 'Issue in save bill and print', 'getting error while create invoice check issue', 'MEDIUM', 'IN_PROGRESS', NULL, 'Check issue', NULL, NULL, '2026-05-13 12:20:32', '2026-05-13 12:22:08', NULL);
 
 -- --------------------------------------------------------
 
@@ -4975,7 +5303,7 @@ CREATE TABLE IF NOT EXISTS `support_ticket_comments` (
   KEY `idx_ticket_id` (`ticket_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Comments and discussion on support tickets';
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Comments and discussion on support tickets';
 
 --
 -- Dumping data for table `support_ticket_comments`
@@ -4984,7 +5312,8 @@ CREATE TABLE IF NOT EXISTS `support_ticket_comments` (
 INSERT INTO `support_ticket_comments` (`id`, `ticket_id`, `user_id`, `comment`, `is_internal`, `attachment_url`, `created_at`, `updated_at`) VALUES
 (6, 4, 180, 'gfdgfdgfd', 0, NULL, '2026-04-11 06:36:17', '2026-04-11 06:36:17'),
 (7, 4, 1, 'fdsfdsfsdffsd', 0, NULL, '2026-04-11 06:36:44', '2026-04-11 06:36:44'),
-(8, 4, 180, 'ok thanks', 0, NULL, '2026-04-11 07:18:22', '2026-04-11 07:18:22');
+(8, 4, 180, 'ok thanks', 0, NULL, '2026-04-11 07:18:22', '2026-04-11 07:18:22'),
+(10, 6, 1, 'Recieved your issue. We are working on it', 0, NULL, '2026-05-13 12:21:41', '2026-05-13 12:21:41');
 
 -- --------------------------------------------------------
 
@@ -5009,9 +5338,9 @@ CREATE TABLE IF NOT EXISTS `tablelist` (
 
 INSERT INTO `tablelist` (`id`, `shop_id`, `category`, `name`, `status`) VALUES
 (54, 4, '9', 'VIP1', 0),
-(55, 5, '10', 'Table 1', 0),
-(56, 5, '10', 'Table 2', 1),
-(57, 5, '10', 'Table 3', 1),
+(55, 5, '10', 'Table 1', 1),
+(56, 5, '10', 'Table 2', 0),
+(57, 5, '10', 'Table 3', 0),
 (58, 5, '10', 'VIP 1', 0),
 (59, 5, '10', 'VIP 2', 0),
 (60, 5, '10', 'VIP 3', 0),
@@ -5195,7 +5524,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   UNIQUE KEY `unique_user_uuid` (`user_uuid`),
   KEY `idx_user_uuid` (`user_uuid`),
   KEY `idx_shop_id` (`shop_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=191 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=192 DEFAULT CHARSET=latin1;
 
 --
 -- Dumping data for table `users`
@@ -5213,7 +5542,8 @@ INSERT INTO `users` (`id`, `shop_id`, `user_uuid`, `name`, `uname`, `pass`, `con
 (187, 9, '3a6ff780-ac7e-44dd-b803-aa12d92e69dd', 'Narender Admin', '69408', '$2a$10$cdfSR1kTex6l7cug0CQVtu95DSzgkKYPbKcuF9z1aL8/DS0V4lr6q', '+66-800062602', 'welcomesuit@gmail.com', 'admin', 1, ''),
 (188, 9, '15389e35-087c-4443-882e-2eb8ca801b78', 'Cashier Welcome Suit', '32741', '$2a$10$xn6vMcxwzGiUlv2Bw5SKku9h6Xr9MbQDI2jwTPUpz.w2TDuc7ZJ9a', '+66-800062602', 'welcomecashier@gmail.com', 'Cashier', 1, ''),
 (189, 7, 'd291fd7c-47c8-4831-9523-3c298f67a904', 'test', '20070', '$2a$10$C6IadyzZTiKvzYmr7BFEieZFH9KWx6TA/HB3TAQO91nQHL4eE2Axi', '21325', 'khajonpong55@gmail.com', 'Cashier', 1, '2026-04-23'),
-(190, 5, 'dd022cc7-1e7a-4b8d-ac2a-8eba598fe5f1', 'Manager', '49678', '$2a$10$5X61iaz5Thx25GYqiXKnqumFACxYAQgz2i3SFpQXxJz3LeOtZNE5q', '2542354546', 'axialtour55@gmail.com', 'Account', 1, '2026-05-13');
+(190, 5, 'dd022cc7-1e7a-4b8d-ac2a-8eba598fe5f1', 'Manager', '49678', '$2a$10$5X61iaz5Thx25GYqiXKnqumFACxYAQgz2i3SFpQXxJz3LeOtZNE5q', '2542354546', 'axialtour55@gmail.com', 'Account', 1, '2026-05-13'),
+(191, 5, '20b5ef9a-e85f-46f4-8232-b58cb7ce1d42', 'Raj', '97815', '$2a$10$x7hL1dMQchyonxN57EQmLuxiSW7S.hdDseKoypdcKo7/clRWSAr0G', '25369556', 'AXIALITSOLUTIONS0001@GMAIL.COM', 'kds', 1, '2026-05-14');
 
 -- --------------------------------------------------------
 
