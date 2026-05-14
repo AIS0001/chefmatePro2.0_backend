@@ -11,7 +11,7 @@ Local WebSocket server that receives print jobs from the cloud node agent.
 
 ## Environment
 
-- `LOCAL_AGENT_PORT` (default: 5010)
+- `LOCAL_AGENT_PORT` (default: 7001)
 - `KITCHEN_PRINTER_IP` (default: 192.168.1.217)
 - `CASHIER_PRINTER_IP` (default: 192.168.1.216)
 - `DEFAULT_PRINTER_IP` (default: kitchen IP)

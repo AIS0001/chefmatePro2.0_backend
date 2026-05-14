@@ -3,6 +3,10 @@ const express = require("express");
 const { Server } = require("socket.io");
 const escpos = require("escpos");
 const cors = require("cors");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const QRCode = require("qrcode");
 
 escpos.Network = require("escpos-network");
 
@@ -17,6 +21,10 @@ const io = new Server(server, {
     origin: "*"
   }
 });
+
+app.use(cors());
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
 app.get("/health", (req, res) => {
   res.json({ success: true, status: "ok" });
@@ -51,6 +59,16 @@ const toAmount = (value) => {
     return "0.00";
   }
   return amount.toFixed(2);
+};
+
+const toBool = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+  return false;
 };
 
 const wrapText = (text, width) => {
@@ -98,10 +116,160 @@ const getValue = (obj, keys, fallback = "") => {
   return fallback;
 };
 
-io.on("connection", (socket) => {
-  console.log("Cloud agent connected:", socket.id);
+/**
+ * Generate QR code bitmap for ESC/POS printer
+ * Returns bitmap data or null on error
+ */
+const generateQRCodeBitmap = async (text, size = 200) => {
+  try {
+    console.log("Generating QR code bitmap...");
+    
+    // Generate QR code as PNG buffer
+    const qrBuffer = await QRCode.toBuffer(text, {
+      errorCorrectionLevel: 'M',
+      type: 'image/png',
+      width: size,
+      margin: 1
+    });
+    
+    return qrBuffer;
+  } catch (err) {
+    console.error("QR bitmap generation failed:", err.message);
+    return null;
+  }
+};
 
-  socket.on("print", (payload, ack) => {
+/**
+ * Detect print location from items (kitchen, bar, shisha, etc.)
+ */
+const detectLocationFromItems = (items) => {
+  if (!Array.isArray(items) || items.length === 0) return 'kitchen';
+
+  let hasFood = false;
+  let hasBar = false;
+  let hasShisha = false;
+
+  items.forEach((item) => {
+    const itemGroup = String(item?.item_group || item?.itemGroup || item?.group || '').toLowerCase();
+    const itemName = String(item?.name || item?.item_name || item?.itemName || '').toLowerCase();
+    
+    if (itemGroup.includes('shisha') || itemName.includes('shisha')) {
+      hasShisha = true;
+    } else if (itemGroup.includes('bar') || itemGroup.includes('beverage') || itemName.includes('alcohol')) {
+      hasBar = true;
+    } else {
+      hasFood = true;
+    }
+  });
+
+  // Priority: if mixed items, kitchen gets all
+  if (hasFood || !hasBar && !hasShisha) return 'kitchen';
+  if (hasShisha && !hasFood && !hasBar) return 'shisha';
+  if (hasBar && !hasFood && !hasShisha) return 'bar';
+  
+  return 'kitchen';
+};
+
+/**
+ * Get printer IP for a given location
+ */
+const getPrinterForLocation = (location) => {
+  const loc = String(location || 'kitchen').toLowerCase();
+  
+  if (loc === 'bar') {
+    return {
+      ip: process.env.BAR_PRINTER_IP || process.env.KITCHEN_PRINTER_IP || '192.168.1.217',
+      port: process.env.BAR_PRINTER_PORT || process.env.KITCHEN_PRINTER_PORT || 9100
+    };
+  } else if (loc === 'shisha') {
+    return {
+      ip: process.env.SHISHA_PRINTER_IP || process.env.KITCHEN_PRINTER_IP || '192.168.1.217',
+      port: process.env.SHISHA_PRINTER_PORT || process.env.KITCHEN_PRINTER_PORT || 9100
+    };
+  } else {
+    // Default to kitchen
+    return {
+      ip: process.env.KITCHEN_PRINTER_IP || process.env.CASHIER_PRINTER_IP || '192.168.1.217',
+      port: process.env.KITCHEN_PRINTER_PORT || process.env.PRINTER_PORT || 9100
+    };
+  }
+};
+const printQRWithFallback = (printer, websiteUrl, onComplete) => {
+  // Try 1: Native QR code method
+  if (typeof printer.qrcode === "function") {
+    try {
+      console.log("Attempting native QR code print...");
+      printer.qrcode(websiteUrl, 6, "M", 6);
+      console.log("✅ Native QR code sent to printer");
+      onComplete(true);
+      return;
+    } catch (nativeQrErr) {
+      console.warn("Native QR failed:", nativeQrErr.message);
+    }
+  }
+
+  // Try 2: Bitmap QR via temp file (more reliable for ESC/POS)
+  const tempQrFile = path.join(
+    os.tmpdir(),
+    `chefmate-qr-${Date.now()}-${Math.random().toString(36).slice(2)}.png`
+  );
+
+  QRCode.toFile(
+    tempQrFile,
+    websiteUrl,
+    { errorCorrectionLevel: "M", margin: 1, width: 220 },
+    (qrFileErr) => {
+      if (!qrFileErr) {
+        try {
+          escpos.Image.load(tempQrFile, (image) => {
+            try {
+              if (typeof printer.raster === "function") {
+                console.log("Attempting raster QR print...");
+                printer.raster(image, "dhdw");
+              } else if (typeof printer.image === "function") {
+                console.log("Attempting image QR print...");
+                printer.image(image, "d24");
+              } else if (typeof printer.qrimage === "function") {
+                console.log("Attempting qrimage print...");
+                printer.qrimage(websiteUrl, () => {});
+              } else {
+                throw new Error("No image method available");
+              }
+
+              console.log("✅ Bitmap QR code sent to printer");
+              
+              // Clean up temp file
+              try {
+                fs.unlinkSync(tempQrFile);
+              } catch (unlinkErr) {
+                console.warn("Failed to clean up temp QR file:", unlinkErr.message);
+              }
+              
+              onComplete(true);
+            } catch (imageErr) {
+              console.error("Image print error:", imageErr.message);
+              // Fall through to text fallback
+              fs.unlinkSync(tempQrFile).catch(() => {});
+              printer.align("ct").text(websiteUrl);
+              onComplete(true);
+            }
+          });
+          return;
+        } catch (loadErr) {
+          console.error("Image load error:", loadErr.message);
+        }
+      }
+
+      // Fallback: Print URL as text
+      console.log("All QR methods failed, printing URL as text");
+      fs.unlink(tempQrFile, () => {}); // Async cleanup, ignore errors
+      printer.align("ct").text(websiteUrl);
+      onComplete(true);
+    }
+  );
+};
+
+const handlePrintJob = (payload, ack) => {
     console.log("Received print job:", payload);
 
     const jobId = payload && payload.jobId;
@@ -282,9 +450,10 @@ io.on("connection", (socket) => {
     const payloadPrinterIp = payload && (payload.printerIp || payload.printer_ip);
     const payloadPrinterPort = payload && (payload.printerPort || payload.printer_port);
 
-    const kitchenIp = process.env.KITCHEN_PRINTER_IP || "192.168.1.217";
     const cashierIp = process.env.CASHIER_PRINTER_IP || "192.168.1.216";
     const defaultIp = process.env.DEFAULT_PRINTER_IP || cashierIp;
+    // If kitchen printer IP is not configured, fall back to default/cashier printer.
+    const kitchenIp = process.env.KITCHEN_PRINTER_IP || defaultIp;
 
     const isCashier = target === "cashier" || target === "counter" || target === "front";
     const isKitchen = target === "kitchen" || target === "kt";
@@ -393,6 +562,28 @@ io.on("connection", (socket) => {
           );
           const taxPercent = Number(getValue(payload, ["tax_percent", "taxPercent", "tax_rate", "taxRate"], Number.NaN));
           const taxLabel = Number.isNaN(taxPercent) ? "Tax:" : `Tax (${taxPercent}%):`;
+          const loyaltySelectedRaw = getValue(payload, ["loyalty_selected", "loyaltySelected"], false);
+          const loyaltyRedeemedRaw = getValue(payload, ["loyalty_redeemed", "loyaltyRedeemed"], false);
+          const loyaltySelected = toBool(loyaltySelectedRaw);
+          const loyaltyRedeemed = toBool(loyaltyRedeemedRaw);
+          const loyaltyMemberName = String(getValue(payload, ["loyalty_member_name"], "") || "").trim();
+          const loyaltyMemberContact = String(getValue(payload, ["loyalty_member_contact"], "") || "").trim();
+          const loyaltyOfferName = String(getValue(payload, ["loyalty_offer_name"], "") || "").trim();
+          const loyaltyOfferType = String(getValue(payload, ["loyalty_offer_type"], "") || "").trim().toUpperCase();
+          const loyaltyPointsUsed = Number(getValue(payload, ["loyalty_points_used"], 0));
+          const loyaltyDiscountValue = Number(getValue(payload, ["loyalty_discount_value"], 0));
+          const loyaltyFreeItem = String(getValue(payload, ["loyalty_free_item"], "") || "").trim();
+          const loyaltyPointsBalance = Number(getValue(payload, ["loyalty_points_balance"], 0));
+          const loyaltyQrUrl = String(getValue(payload, ["loyalty_qr_url", "loyaltyQrUrl"], "") || "").trim();
+          const loyaltyQrNote = String(getValue(payload, ["loyalty_qr_note", "loyaltyQrNote"], "") || "").trim();
+          const hasLoyaltyData = Boolean(
+            loyaltyMemberName ||
+            loyaltyMemberContact ||
+            loyaltyQrUrl ||
+            loyaltyRedeemed ||
+            loyaltyPointsBalance > 0 ||
+            loyaltyPointsUsed > 0
+          );
 
           printer.align("ct").style("b").size(1, 1).text(companyName);
           printer.style("normal").size(0, 0);
@@ -447,6 +638,34 @@ io.on("connection", (socket) => {
           printer.text(leftMargin + formatLeftRight("Round Off:", toAmount(roundOffAmount), lineWidth - leftMargin.length));
           printer.style("b").text(leftMargin + formatLeftRight("Total Amount:", toAmount(grandTotalAmount), lineWidth - leftMargin.length));
           printer.style("normal").text(leftMargin + "------------------------------------------");
+
+          if (loyaltySelected || hasLoyaltyData) {
+            printer.align("ct").text("LOYALTY DETAILS");
+            if (loyaltyMemberName) {
+              printer.text(`Member: ${loyaltyMemberName}`);
+            }
+            if (loyaltyMemberContact) {
+              printer.text(`Contact: ${loyaltyMemberContact}`);
+            }
+            if (loyaltyRedeemed) {
+              printer.text("*** LOYALTY REWARD REDEEMED ***");
+              if (loyaltyOfferName) {
+                wrapText(`Offer: ${loyaltyOfferName}`, lineWidth).forEach((line) => printer.text(line));
+              }
+              if (loyaltyOfferType === "DISCOUNT_AMOUNT" || loyaltyOfferType === "DISCOUNT_PERCENT") {
+                printer.text(`Discount Applied: ${toAmount(loyaltyDiscountValue)}`);
+              }
+              if (loyaltyOfferType === "FREE_ITEM" && loyaltyFreeItem) {
+                wrapText(`Free Item: ${loyaltyFreeItem}`, lineWidth).forEach((line) => printer.text(line));
+              }
+              printer.text(`Points Used: ${loyaltyPointsUsed}`);
+            }
+            if (loyaltyPointsBalance > 0 || loyaltyRedeemed) {
+              printer.text(`Remaining Points: ${loyaltyPointsBalance}`);
+            }
+            printer.text("------------------------------------------");
+          }
+
           printer.align("ct").text(`Thank you for visiting ${companyName}`);
           if (companyPhone) {
             printer.text(" ");
@@ -462,43 +681,142 @@ io.on("connection", (socket) => {
             }
           };
 
-          if (websiteUrl) {
-            printer.text(" ").align("ct").text(reviewLabel).text(" ");
+          const printQrBlock = (title, url, note, done) => {
+            printer.text(" ").align("ct");
+            if (title) {
+              printer.text(title);
+            }
+            printer.text(" ");
 
-            if (typeof printer.qrcode === "function") {
-              try {
-                printer.qrcode(websiteUrl, 6, "M", 6);
-                finalizeInvoice();
-              } catch (nativeQrErr) {
-                console.error("Native QR print error:", nativeQrErr);
-                if (typeof printer.qrimage === "function") {
-                  printer.qrimage(websiteUrl, (qrErr) => {
-                    if (qrErr) {
-                      console.error("QR image print error:", qrErr);
-                      printer.align("ct").text(websiteUrl);
+            const printBitmapFallback = (next) => {
+              const tempQrFile = path.join(
+                os.tmpdir(),
+                `chefmate-qr-${Date.now()}-${Math.random().toString(36).slice(2)}.png`
+              );
+
+              QRCode.toFile(
+                tempQrFile,
+                url,
+                { errorCorrectionLevel: "M", margin: 1, width: 220 },
+                (qrFileErr) => {
+                  if (qrFileErr) {
+                    console.error("Bitmap QR generation error:", qrFileErr);
+                    next();
+                    return;
+                  }
+
+                  escpos.Image.load(tempQrFile, (image) => {
+                    try {
+                      if (typeof printer.raster === "function") {
+                        printer.raster(image, "dhdw");
+                      } else if (typeof printer.image === "function") {
+                        printer.image(image, "d24");
+                      }
+                    } catch (bitmapPrintErr) {
+                      console.error("Bitmap QR print error:", bitmapPrintErr);
                     }
-                    finalizeInvoice();
+
+                    fs.unlink(tempQrFile, () => {});
+                    next();
                   });
-                } else {
-                  printer.align("ct").text(websiteUrl);
-                  finalizeInvoice();
                 }
+              );
+            };
+
+            const finishBlock = () => {
+              if (note) {
+                wrapText(note, lineWidth).forEach((line) => printer.text(line));
               }
-            } else if (typeof printer.qrimage === "function") {
-              printer.qrimage(websiteUrl, (qrErr) => {
+              done();
+            };
+
+            if (!url) {
+              finishBlock();
+              return;
+            }
+
+            if (typeof printer.qrimage === "function") {
+              printer.qrimage(url, (qrErr) => {
                 if (qrErr) {
                   console.error("QR image print error:", qrErr);
-                  printer.align("ct").text(websiteUrl);
+                  if (typeof printer.qrcode === "function") {
+                    try {
+                      // Native ESC/POS QR fallback for printers that reject image mode.
+                      printer.qrcode(url, 10, "M", 6);
+                      printer.text(" ");
+                      printer.text(" ");
+                      finishBlock();
+                      return;
+                    } catch (nativeQrErr) {
+                      console.error("Native QR print error:", nativeQrErr);
+                    }
+                  }
+                  printBitmapFallback(() => {
+                    printer.text(" ");
+                    printer.text(" ");
+                    finishBlock();
+                  });
+                  return;
                 }
-                finalizeInvoice();
+                printer.text(" ");
+                printer.text(" ");
+                finishBlock();
+              });
+            } else if (typeof printer.qrcode === "function") {
+              try {
+                // Use a higher QR version for longer URLs to reduce overflow failures.
+                printer.qrcode(url, 10, "M", 6);
+                printer.text(" ");
+                printer.text(" ");
+                finishBlock();
+                return;
+              } catch (nativeQrErr) {
+                console.error("Native QR print error:", nativeQrErr);
+              }
+              printBitmapFallback(() => {
+                printer.text(" ");
+                printer.text(" ");
+                finishBlock();
               });
             } else {
-              printer.align("ct").text(websiteUrl);
-              finalizeInvoice();
+              console.error("QR rendering is not available on this ESC/POS setup");
+              printBitmapFallback(() => {
+                printer.text(" ");
+                printer.text(" ");
+                finishBlock();
+              });
             }
-          } else {
-            finalizeInvoice();
+          };
+
+          const qrBlocks = [];
+          if (loyaltyQrUrl) {
+            qrBlocks.push({
+              title: "Check Your Loyalty Points",
+              url: loyaltyQrUrl,
+              note: loyaltyQrNote || "Scan QR to view loyalty points and history"
+            });
           }
+          if (websiteUrl) {
+            qrBlocks.push({
+              title: reviewLabel,
+              url: websiteUrl,
+              note: ""
+            });
+          }
+
+          const printQrBlocksSequentially = (blocks, index = 0) => {
+            if (index >= blocks.length) {
+              finalizeInvoice();
+              return;
+            }
+
+            const block = blocks[index];
+            printQrBlock(block.title, block.url, block.note, () => {
+              printQrBlocksSequentially(blocks, index + 1);
+            });
+          };
+
+          printQrBlocksSequentially(qrBlocks);
           return;
         }
 
@@ -587,7 +905,12 @@ io.on("connection", (socket) => {
         }
       }
     });
-  });
+};
+
+io.on("connection", (socket) => {
+  console.log("Cloud agent connected:", socket.id);
+
+  socket.on("print", handlePrintJob);
 
   socket.on("disconnect", (reason) => {
     console.log("Cloud agent disconnected:", reason);
@@ -600,28 +923,247 @@ io.on("connection", (socket) => {
 app.post("/print-kot", async (req, res) => {
   try {
     console.log('📥 Received print-kot request');
-    const { printer_ip, printer_port, data, type } = req.body;
+    const { printer_ip, printer_port, data, type, heading, table, items, total, companyName } = req.body || {};
 
-    if (!printer_ip || !printer_port) {
+    const payloadData = (data && typeof data === "object") ? data : {};
+    const finalHeading = heading || payloadData.heading || "KITCHEN KOT";
+    const finalTable = table || payloadData.table || payloadData.table_number || "-";
+    const finalItems = Array.isArray(items)
+      ? items
+      : (Array.isArray(payloadData.items) ? payloadData.items : []);
+    const finalTotal = Number(total ?? payloadData.total ?? 0);
+    const finalCompanyName = companyName || payloadData.companyName || "Restaurant";
+    const jobId = req.body?.jobId || payloadData.jobId || `kot-${Date.now()}`;
+    
+    if (finalItems.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Missing printer_ip or printer_port"
+        message: "No items to print"
       });
     }
 
-    console.log(`🖨️ Sending print job to ${printer_ip}:${printer_port}`);
+    // 🎯 Use provided printer IP, or detect from items as fallback
+    let finalPrinterIp = printer_ip;
+    let finalPrinterPort = printer_port;
 
-    // Emit to all connected socket.io clients to handle printing
-    io.emit('print-job', {
-      printer_ip,
-      printer_port,
-      data,
-      type: type || 'KOT'
-    });
+    if (!finalPrinterIp || !finalPrinterPort) {
+      console.log("ℹ️  No printer IP provided, detecting from items...");
+      const detectedLocation = detectLocationFromItems(finalItems);
+      const targetPrinter = getPrinterForLocation(detectedLocation);
+      finalPrinterIp = targetPrinter.ip;
+      finalPrinterPort = targetPrinter.port;
+      console.log(`📍 Detected location: ${detectedLocation}`);
+    }
 
-    return res.json({
-      success: true,
-      message: "Print job sent to local printing agents"
+    console.log(`🖨️ Routing KOT to printer: ${finalPrinterIp}:${finalPrinterPort}`);
+
+    const device = new escpos.Network(finalPrinterIp, Number(finalPrinterPort));
+    const printer = new escpos.Printer(device);
+
+    return device.open((err) => {
+      if (err) {
+        console.error("Printer connection error (REST):", err.message);
+        return res.status(500).json({
+          success: false,
+          message: "Printer not connected",
+          error: err.message
+        });
+      }
+
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-GB');
+        const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+        const lineWidth = 42;
+        const separator = "-".repeat(lineWidth);
+        const leftMargin = "  ";
+        const invoiceHint = String(getValue(req.body, ["printType", "type", "documentType", "docType"], type || "")).toLowerCase();
+        const isInvoiceBill =
+          invoiceHint.includes("bill") ||
+          invoiceHint.includes("invoice") ||
+          String(finalHeading || "").toLowerCase().includes("invoice");
+
+        if (isInvoiceBill) {
+          const invoiceNo = getValue(req.body, ["invoiceNo", "invoice_no", "bill_id", "billId"], jobId);
+          const rawTableNo = getValue(req.body, ["table", "table_number", "tableNo", "tablenumber"], finalTable || "-");
+          const tableNo = String(rawTableNo || "-").replace(/^table\s*/i, "").trim() || "-";
+          const billDate = getValue(req.body, ["date", "inv_date", "billDate"], dateStr);
+          const billTime = getValue(req.body, ["time", "inv_time", "billTime"], timeStr);
+          const paymentMode = getValue(req.body, ["payment_mode", "paymentMode", "mode"], "Cash");
+
+          const companyAddress = getValue(req.body, ["companyAddress", "address"], process.env.COMPANY_ADDRESS || "");
+          const companyPhone = getValue(req.body, ["companyPhone", "phone", "phone_number"], process.env.COMPANY_PHONE || "");
+          const companyWebsiteRaw = getValue(
+            req.body,
+            ["companyWebsite", "company_website", "website", "web_site", "url"],
+            process.env.COMPANY_WEBSITE || ""
+          );
+          const companyWebsite = String(companyWebsiteRaw || "").trim();
+          const websiteUrl = companyWebsite
+            ? (/^https?:\/\//i.test(companyWebsite) ? companyWebsite : `https://${companyWebsite}`)
+            : "";
+          const reviewLabel = /google|g\.page|maps/i.test(websiteUrl)
+            ? "Scan for Google Review"
+            : "Visit us online";
+          const companyTax = getValue(req.body, ["companyTaxDetails", "taxDetails", "tax_id", "taxId"], process.env.COMPANY_TAX_DETAILS || "");
+
+          const subtotalAmount = Number(getValue(req.body, ["subtotal", "subTotal"], 0));
+          const discountType = String(getValue(req.body, ["discount_type", "discountType"], "")).toLowerCase();
+          const discountValue = Number(getValue(req.body, ["discount_value", "discountValue"], 0));
+          const discountAmount = Number(getValue(req.body, ["discount_amount", "discountAmount"], 0));
+          const subtotalAfterDiscountAmount = Number(
+            getValue(req.body, ["subtotal_afterdiscount", "subtotalAfterDiscount"], subtotalAmount - discountAmount)
+          );
+          const taxAmount = Number(getValue(req.body, ["tax", "taxAmount", "tax_amount"], 0));
+          const roundOffAmount = Number(getValue(req.body, ["roundoff", "round_off", "roundOff"], 0));
+          const grandTotalAmount = Number(
+            getValue(req.body, ["grand_total", "grandTotal", "net_total", "total"], subtotalAfterDiscountAmount + taxAmount + roundOffAmount)
+          );
+          const taxPercent = Number(getValue(req.body, ["tax_percent", "taxPercent", "tax_rate", "taxRate"], Number.NaN));
+          const taxLabel = Number.isNaN(taxPercent) ? "Tax:" : `Tax (${taxPercent}%):`;
+
+          printer.align("ct").style("b").size(1, 1).text(finalCompanyName);
+          printer.style("normal").size(0, 0);
+          if (companyAddress) {
+            wrapText(companyAddress, lineWidth).forEach((line) => printer.text(line));
+          }
+          if (companyPhone) {
+            wrapText(companyPhone, lineWidth).forEach((line) => printer.text(line));
+          }
+          if (companyTax) printer.text(`Tax:- ${companyTax}`);
+
+          printer.text(" ").align("lt");
+          printer.text(leftMargin + formatLeftRight(`Invoice No: ${invoiceNo}`, `Table ${tableNo}`, lineWidth - leftMargin.length));
+          printer.text(leftMargin + formatLeftRight(`Date: ${billDate}`, `Time: ${billTime}`, lineWidth - leftMargin.length));
+          printer.text(leftMargin + `Mode: ${paymentMode}`);
+          printer.text(leftMargin + separator);
+
+          printer.style("b");
+          printer.text(leftMargin + `${padRight("Item", 20)}${padLeft("Qty", 4)}${padLeft("Rate", 8)}${padLeft("Total", 10)}`);
+          printer.style("normal");
+          printer.text(leftMargin + separator);
+
+          finalItems.forEach((item) => {
+            const itemName = getValue(item, ["name", "item_name", "itemName"], "Item");
+            const quantity = Number(getValue(item, ["quantity", "qty"], 0));
+            const rate = Number(getValue(item, ["rate", "price", "unit_price", "unitPrice", "total_price"], 0));
+            const lineTotal = Number(
+              getValue(item, ["total", "total_amount", "lineTotal", "subtotal", "total_price"], quantity * rate)
+            );
+
+            const nameLines = wrapText(itemName, 20);
+            nameLines.forEach((nameLine, idx) => {
+              const qtyCell = idx === 0 ? padLeft(quantity || 0, 4) : padLeft("", 4);
+              const rateCell = idx === 0 ? padLeft(toAmount(rate), 8) : padLeft("", 8);
+              const totalCell = idx === 0 ? padLeft(toAmount(lineTotal), 10) : padLeft("", 10);
+
+              printer.text(leftMargin + `${padRight(nameLine, 20)}${qtyCell}${rateCell}${totalCell}`);
+            });
+          });
+
+          printer.text(leftMargin + separator);
+          printer.text(leftMargin + formatLeftRight("Subtotal:", toAmount(subtotalAmount), lineWidth - leftMargin.length));
+          if (discountValue > 0 || discountAmount > 0) {
+            const discountDisplay =
+              discountType.includes("percent") || discountType.includes("percentage")
+                ? `${toAmount(discountValue).replace(/\.00$/, "")}%`
+                : toAmount(discountAmount || discountValue);
+            printer.text(leftMargin + formatLeftRight("Discount:", discountDisplay, lineWidth - leftMargin.length));
+            printer.text(leftMargin + formatLeftRight("Subtotal after Discount:", toAmount(subtotalAfterDiscountAmount), lineWidth - leftMargin.length));
+          }
+          printer.text(leftMargin + formatLeftRight(taxLabel, toAmount(taxAmount), lineWidth - leftMargin.length));
+          printer.text(leftMargin + formatLeftRight("Round Off:", toAmount(roundOffAmount), lineWidth - leftMargin.length));
+          printer.style("b").text(leftMargin + formatLeftRight("Total Amount:", toAmount(grandTotalAmount), lineWidth - leftMargin.length));
+          printer.style("normal").text(leftMargin + "------------------------------------------");
+          printer.align("ct").text(`Thank you for visiting ${finalCompanyName}`);
+          if (companyPhone) {
+            printer.text(" ");
+            printer.text(`Online Order/Home Delivery: ${companyPhone}`);
+          }
+
+          const finalizeInvoice = () => {
+            printer.align("ct").text("------------------------------------------");
+            printer.align("ct").text("Powered by Cloudnet Softwares");
+            printer.style("normal").text(" ").text(" ").cut().close(() => {
+              res.json({
+                success: true,
+                message: "Invoice printed successfully",
+                data: {
+                  jobId,
+                  printer_ip: finalPrinterIp,
+                  printer_port: finalPrinterPort,
+                  location: detectedLocation,
+                  type: type || 'INVOICE'
+                }
+              });
+            });
+          };
+
+          if (websiteUrl) {
+            printer.text(" ").align("ct").text(reviewLabel).text(" ");
+            printQRWithFallback(printer, websiteUrl, finalizeInvoice);
+          } else {
+            finalizeInvoice();
+          }
+          return;
+        }
+
+        printer
+          .align("ct")
+          .style("b")
+          .size(1, 1)
+          .text(finalCompanyName)
+          .style("normal")
+          .font("a")
+          .size(0, 0)
+          .text(finalHeading)
+          .text("------------------------")
+          .size(0, 0)
+          .align("lt")
+          .text(`Table: ${finalTable}`)
+          .text(`Date: ${dateStr}  Time: ${timeStr}`)
+          .align("ct")
+          .text("------------------------")
+          .align("lt");
+
+        finalItems.forEach((item) => {
+          const qty = Number(getValue(item, ["quantity", "qty"], 0));
+          const name = getValue(item, ["name", "item_name", "itemName"], "Item");
+          printer.text(`${qty}x ${name}`);
+        });
+
+        if (!String(finalHeading).toLowerCase().includes("kot")) {
+          printer.align("ct").text("------------------------");
+          printer.style("b").text(`Total: ${toAmount(finalTotal)}`);
+          printer.style("normal");
+        }
+
+        return printer
+          .text(" ")
+          .text(" ")
+          .cut()
+          .close(() => {
+            res.json({
+              success: true,
+              message: "KOT printed successfully",
+              data: {
+                jobId,
+                printer_ip: finalPrinterIp,
+                printer_port: finalPrinterPort,
+                location: detectedLocation,
+                type: type || 'KOT'
+              }
+            });
+          });
+      } catch (printError) {
+        console.error("Print-kot error (REST):", printError);
+        return res.status(500).json({
+          success: false,
+          message: "Print failed",
+          error: printError.message
+        });
+      }
     });
 
   } catch (error) {
@@ -643,7 +1185,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-const PORT = process.env.LOCAL_AGENT_PORT || 5010;
+const PORT = process.env.LOCAL_AGENT_PORT || 7001;
 server.listen(PORT, () => {
   console.log(`\n✅ Local Printing Agent running on http://127.0.0.1:${PORT}`);
   console.log(`   REST API: http://127.0.0.1:${PORT}/print-kot`);

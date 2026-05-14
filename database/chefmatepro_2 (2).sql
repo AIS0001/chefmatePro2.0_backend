@@ -595,7 +595,7 @@ CREATE TABLE IF NOT EXISTS `error_logs` (
   KEY `idx_status` (`status`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_shop_error_status` (`shop_id`,`status`,`created_at`)
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -2888,7 +2888,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_is_active` (`is_active`),
   KEY `idx_scheduled_for` (`scheduled_for`)
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `notifications`
@@ -4763,7 +4763,7 @@ CREATE TABLE IF NOT EXISTS `subscription_plans` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_tier_level` (`tier_level`),
   KEY `idx_visible` (`visible_to_customers`,`is_active`)
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `subscription_plans`
@@ -4784,7 +4784,7 @@ DROP TABLE IF EXISTS `super_admin_users`;
 CREATE TABLE IF NOT EXISTS `super_admin_users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `first_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `last_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
