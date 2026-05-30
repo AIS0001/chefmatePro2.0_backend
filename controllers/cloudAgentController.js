@@ -9,7 +9,7 @@ const getSocket = () => {
     return socket;
   }
 
-  const url = process.env.LOCAL_AGENT_URL || "http://localhost:5010";
+  const url = process.env.LOCAL_AGENT_URL || "http://localhost:7001";
   socket = ioClient(url, {
     reconnection: true,
     reconnectionAttempts: 5,
@@ -797,7 +797,7 @@ const getHealth = (req, res) => {
   return res.json({
     success: true,
     connected: socketClient.connected,
-    url: process.env.LOCAL_AGENT_URL || "http://localhost:5010"
+    url: process.env.LOCAL_AGENT_URL || "http://localhost:7001"
   });
 };
 

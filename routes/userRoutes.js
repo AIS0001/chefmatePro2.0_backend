@@ -10,6 +10,7 @@ const deletecontroller = require("../controllers/deletecontrol");
 const viewcontroller = require("../controllers/viewcontrol");
 const updatecontroller = require("../controllers/updatecontrol");
 const loyaltycontroller = require("../controllers/loyaltyController");
+const kdsController = require('../controllers/kdsController');
 const monitoringSupportController = require('../controllers/monitoringSupportController');
 const { db } = require('../config/dbconnection');
 // const featureController = require("../controllers/featureController"); // Disabled
@@ -91,6 +92,10 @@ router.get('/support/tickets/stats', auth.isAuthorize, monitoringSupportControll
 router.get('/support/tickets/:id', auth.isAuthorize, monitoringSupportController.getShopSupportTicketDetail);
 router.post('/support/tickets', auth.isAuthorize, monitoringSupportController.createShopSupportTicket);
 router.post('/support/tickets/:ticket_id/comments', auth.isAuthorize, monitoringSupportController.addShopTicketComment);
+
+// KDS board endpoints
+router.get('/kds/orders', auth.isAuthorize, kdsController.listOrders);
+router.put('/kds/orders/:id/status', auth.isAuthorize, kdsController.updateOrderStatus);
 
 router.get('/getusers',auth.isAuthorize,usercontroller.getuser);
 router.get('/users-with-uuid', auth.isAuthorize, usercontroller.getUsersWithUuid);

@@ -398,7 +398,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.LOCAL_AGENT_PORT || 5010;
+const PORT = process.env.LOCAL_AGENT_PORT || 7001;
 server.listen(PORT, () => {
   console.log(`Local agent listening on port ${PORT}`);
 });

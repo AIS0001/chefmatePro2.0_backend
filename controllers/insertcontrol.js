@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
 const { requireShopId, tableHasShopId } = require('../helpers/shopScope');
+const { ensureKdsOrdersTable, normalizeKdsStatus } = require('../helpers/kdsTable');
+const websocketManager = require('../helpers/websocketManager');
 
 const insertdata = async (req, res) => {
   try {
@@ -135,6 +137,7 @@ const insertdatabulk = async (req, res) => {
     }
 
     let query, values;
+    let shopId = null;
     
     if (tableName === 'quotation_items') {
       // Handle quotation_items table structure
@@ -152,7 +155,7 @@ const insertdatabulk = async (req, res) => {
       
       query = `INSERT INTO ${tableName} (quotation_id, customer_id, item_name, quantity, rate, total_amount, status, setup_date, table_cat_id) VALUES ?`;
     } else {
-      const shopId = requireShopId(req, res);
+      shopId = requireShopId(req, res);
       if (shopId === null) return;
 
       // Handle order_items and advance_order_items table structure
@@ -178,7 +181,42 @@ const insertdatabulk = async (req, res) => {
     // console.log('Bulk Insert Values:', values);
     // console.log('Table Name:', tableName);
     
-    await db.query(query, [values]);
+    const [insertResult] = await db.query(query, [values]);
+
+    // Mirror POS/advance KOT items into dedicated KDS table.
+    if (tableName === 'order_items' || tableName === 'advance_order_items') {
+      await ensureKdsOrdersTable();
+
+      const firstInsertedId = Number(insertResult?.insertId || 0);
+      const kdsValues = items.map((item, idx) => {
+        const guessedOrderItemId = firstInsertedId > 0 ? firstInsertedId + idx : null;
+        return [
+          shopId,
+          guessedOrderItemId,
+          tableName,
+          String(item.order_number || item.order_id || ''),
+          item.table_number || null,
+          item.item_name || '',
+          item.item_group || null,
+          Number(item.quantity || 0),
+          Number(item.total_amount || item.total_price || 0),
+          normalizeKdsStatus(item.status),
+          item.setup_date || new Date().toISOString().split('T')[0]
+        ];
+      });
+
+      await db.query(
+        `INSERT INTO kds_orders
+          (shop_id, order_item_id, source_table, order_id, table_number, item_name, item_group, quantity, total_price, status, setup_date)
+         VALUES ?`,
+        [kdsValues]
+      );
+
+      // Notify KDS dashboard via WebSocket
+      try {
+        websocketManager.sendToShop(shopId, { type: 'kds_update', shop_id: shopId });
+      } catch (_) { /* non-fatal */ }
+    }
 
     res.json({ 
       success: true, 
