@@ -33,6 +33,8 @@ const tenantMiddleware = (req, res, next) => {
 
     next();
   } catch (error) {
+    res.set('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.set('Access-Control-Allow-Credentials', 'true');
     res.status(400).json({ error: 'Invalid tenant context', details: error.message });
   }
 };

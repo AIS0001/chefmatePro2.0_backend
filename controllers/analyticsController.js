@@ -386,6 +386,7 @@ const getCategoryDistribution = async (req, res) => {
       : 'NULL';
 
     const categorySourceExpression = `COALESCE(${orderItemsGroupExpression}, ${itemNameExpression}, '')`;
+    const normalizedCategorySourceExpression = `CONVERT(${categorySourceExpression} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
 
     const filteredWhereConditions = [];
     const totalsWhereConditions = [];
@@ -429,8 +430,8 @@ const getCategoryDistribution = async (req, res) => {
       FROM (
         SELECT
           CASE
-            WHEN LOWER(${categorySourceExpression}) REGEXP 'bar|beverage|drink|liquor|cocktail|mocktail|juice|coffee|tea|smoothie' THEN 'Beverages'
-            WHEN LOWER(${categorySourceExpression}) REGEXP 'food|starter|main|dessert|meal|snack|kitchen|burger|pizza|rice|pasta|bbq' THEN 'Food Items'
+            WHEN LOWER(${normalizedCategorySourceExpression}) REGEXP 'bar|beverage|drink|liquor|cocktail|mocktail|juice|coffee|tea|smoothie' THEN 'Beverages'
+            WHEN LOWER(${normalizedCategorySourceExpression}) REGEXP 'food|starter|main|dessert|meal|snack|kitchen|burger|pizza|rice|pasta|bbq' THEN 'Food Items'
             ELSE 'Other Items'
           END as category_name
         FROM order_items oi
