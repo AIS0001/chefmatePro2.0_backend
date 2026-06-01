@@ -122,9 +122,9 @@ const getAnalyticsDashboard = async (req, res) => {
     }
     
     // Today's and Yesterday's Sales
-    const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
-    const [yesterdaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, yesterday]);
-    const [todayDiscount] = await db.query(`SELECT COALESCE(SUM(discount_amount), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
+    const [todaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(inv_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
+    const [yesterdaySales] = await db.query(`SELECT COALESCE(SUM(grand_total), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(inv_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, yesterday]);
+    const [todayDiscount] = await db.query(`SELECT COALESCE(SUM(discount_amount), 0) AS val FROM final_bill WHERE shop_id = ? AND DATE(inv_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2`, [shopId, today]);
     
     // Monthly and Today's Purchases  
     const [monthlyPurchases] = await db.query(`
@@ -636,6 +636,56 @@ const getFoodAndDrinksSale = async (req, res) => {
   }
 };
 
+const getWeeklyCloseSummary = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (shopId === null) return;
+
+    const [rows] = await db.query(`
+      SELECT
+        close_date, total_sales, cash_sales, upi_sales, card_sales,
+        qr_sales, online_sales, total_orders, net_sales, status
+      FROM day_close_summary
+      WHERE shop_id = ?
+      ORDER BY close_date DESC
+      LIMIT 7
+    `, [shopId]);
+
+    const latestClose = rows.length > 0 ? rows[0] : null;
+    const weeklyData = [...rows].reverse().map(row => ({
+      date: row.close_date,
+      label: new Date(row.close_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+      totalSales: parseFloat(row.total_sales || 0),
+      cashSales: parseFloat(row.cash_sales || 0),
+      cardSales: parseFloat(row.card_sales || 0),
+      upiSales: parseFloat(row.upi_sales || 0),
+      qrSales: parseFloat(row.qr_sales || 0),
+      onlineSales: parseFloat(row.online_sales || 0),
+      totalOrders: row.total_orders || 0
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        weeklyData,
+        latestClose: latestClose ? {
+          date: latestClose.close_date,
+          totalSales: parseFloat(latestClose.total_sales || 0),
+          cashSales: parseFloat(latestClose.cash_sales || 0),
+          cardSales: parseFloat(latestClose.card_sales || 0),
+          upiSales: parseFloat(latestClose.upi_sales || 0),
+          qrSales: parseFloat(latestClose.qr_sales || 0),
+          onlineSales: parseFloat(latestClose.online_sales || 0),
+          totalOrders: latestClose.total_orders || 0
+        } : null
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching weekly close summary:", err);
+    res.status(500).json({ error: "Failed to fetch weekly close summary", details: err.message });
+  }
+};
+
 module.exports = {
   getAnalyticsDashboard,
   getMonthlySalesVsPurchases,
@@ -646,5 +696,6 @@ module.exports = {
   getTotalSalesExpenses,
   getDailySalesTrend,
   getPurchaseTrends,
-  getFoodAndDrinksSale
+  getFoodAndDrinksSale,
+  getWeeklyCloseSummary
 };

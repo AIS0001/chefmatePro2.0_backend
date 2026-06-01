@@ -33,7 +33,7 @@ const getTodaySalesSummary = async (req, res) => {
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'online' THEN grand_total ELSE 0 END), 0) as online_sales
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) = ? 
+        AND DATE(inv_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
@@ -76,16 +76,16 @@ const getWeeklySalesSummary = async (req, res) => {
 
     const query = `
       SELECT 
-        DATE(setup_date) as sale_date,
-        DAYNAME(setup_date) as day_name,
+        DATE(inv_date) as sale_date,
+        DAYNAME(inv_date) as day_name,
         COUNT(*) as total_orders,
         COALESCE(SUM(grand_total), 0) as total_sales
       FROM final_bill 
       WHERE shop_id = ?
-        AND setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
-      GROUP BY DATE(setup_date), DAYNAME(setup_date)
+      GROUP BY DATE(inv_date), DAYNAME(inv_date)
       ORDER BY sale_date DESC
     `;
     
@@ -200,11 +200,11 @@ const getDateRangeSalesSummary = async (req, res) => {
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'card' THEN grand_total ELSE 0 END), 0) as card_sales,
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'upi' THEN grand_total ELSE 0 END), 0) as upi_sales,
         COALESCE(SUM(CASE WHEN LOWER(payment_mode) = 'online' THEN grand_total ELSE 0 END), 0) as online_sales,
-        MIN(DATE(setup_date)) as first_sale_date,
-        MAX(DATE(setup_date)) as last_sale_date
+        MIN(DATE(inv_date)) as first_sale_date,
+        MAX(DATE(inv_date)) as last_sale_date
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) BETWEEN ? AND ?
+        AND DATE(inv_date) BETWEEN ? AND ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `;
@@ -262,7 +262,7 @@ const getRevenueComparison = async (req, res) => {
         'today' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
+      WHERE shop_id = ? AND DATE(inv_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
       
@@ -270,7 +270,7 @@ const getRevenueComparison = async (req, res) => {
         'yesterday' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE shop_id = ? AND DATE(setup_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
+      WHERE shop_id = ? AND DATE(inv_date) = ? AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
       
@@ -278,7 +278,7 @@ const getRevenueComparison = async (req, res) => {
         'last_7_days' as period,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
-      WHERE shop_id = ? AND setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) 
+      WHERE shop_id = ? AND inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) 
         AND LOWER(payment_mode) != 'entertainment' AND status != 2
       
       UNION ALL
@@ -365,15 +365,15 @@ const getHourlySalesDistribution = async (req, res) => {
     
     const query = `
       SELECT 
-        HOUR(setup_date) as hour,
+        HOUR(inv_date) as hour,
         COUNT(*) as orders,
         COALESCE(SUM(grand_total), 0) as revenue
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) = ?
+        AND DATE(inv_date) = ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
-      GROUP BY HOUR(setup_date)
+      GROUP BY HOUR(inv_date)
       ORDER BY hour
     `;
     
@@ -434,16 +434,16 @@ const getPaymentModeDistribution = async (req, res) => {
     let dateCondition = '';
     switch(period.toLowerCase()) {
       case 'today':
-        dateCondition = 'DATE(setup_date) = CURDATE()';
+        dateCondition = 'DATE(inv_date) = CURDATE()';
         break;
       case 'week':
-        dateCondition = 'setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+        dateCondition = 'inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
         break;
       case 'month':
         dateCondition = 'YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())';
         break;
       default:
-        dateCondition = 'DATE(setup_date) = CURDATE()';
+        dateCondition = 'DATE(inv_date) = CURDATE()';
     }
     
     const query = `
@@ -506,10 +506,10 @@ const getTopSellingItems = async (req, res) => {
     let dateCondition = '';
     switch(period.toLowerCase()) {
       case 'today':
-        dateCondition = 'AND DATE(fb.setup_date) = CURDATE()';
+        dateCondition = 'AND DATE(fb.inv_date) = CURDATE()';
         break;
       case 'week':
-        dateCondition = 'AND fb.setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+        dateCondition = 'AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
         break;
       case 'month':
         dateCondition = 'AND YEAR(fb.inv_date) = YEAR(CURDATE()) AND MONTH(fb.inv_date) = MONTH(CURDATE())';
@@ -578,10 +578,10 @@ const getCategoryPerformance = async (req, res) => {
     let dateCondition = '';
     switch(period.toLowerCase()) {
       case 'today':
-        dateCondition = 'AND DATE(fb.setup_date) = CURDATE()';
+        dateCondition = 'AND DATE(fb.inv_date) = CURDATE()';
         break;
       case 'week':
-        dateCondition = 'AND fb.setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+        dateCondition = 'AND fb.inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
         break;
       case 'month':
         dateCondition = 'AND YEAR(fb.inv_date) = YEAR(CURDATE()) AND MONTH(fb.inv_date) = MONTH(CURDATE())';
@@ -652,10 +652,10 @@ const getProfitLossSummary = async (req, res) => {
     let dateCondition = '';
     switch(period.toLowerCase()) {
       case 'today':
-        dateCondition = 'DATE(setup_date) = CURDATE()';
+        dateCondition = 'DATE(inv_date) = CURDATE()';
         break;
       case 'week':
-        dateCondition = 'setup_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+        dateCondition = 'inv_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
         break;
       case 'month':
         dateCondition = 'YEAR(inv_date) = YEAR(CURDATE()) AND MONTH(inv_date) = MONTH(CURDATE())';
@@ -749,7 +749,7 @@ const getAccountsDashboard = async (req, res) => {
         COUNT(*) as orders
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) = ? 
+        AND DATE(inv_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `, [shopId, today]);
@@ -759,7 +759,7 @@ const getAccountsDashboard = async (req, res) => {
       SELECT COALESCE(SUM(grand_total), 0) as total
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) = ? 
+        AND DATE(inv_date) = ? 
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
     `, [shopId, yesterday]);
@@ -795,7 +795,7 @@ const getAccountsDashboard = async (req, res) => {
         COUNT(*) as count
       FROM final_bill 
       WHERE shop_id = ?
-        AND DATE(setup_date) = ?
+        AND DATE(inv_date) = ?
         AND LOWER(payment_mode) != 'entertainment' 
         AND status != 2
       GROUP BY LOWER(payment_mode)

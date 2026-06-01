@@ -29,7 +29,7 @@ const tenantMiddleware = (req, res, next) => {
     };
 
     // Log tenant context for audit
-    console.log(`[TENANT] Shop: ${req.shop_id}, User: ${req.user?.username}, Action: ${req.method} ${req.path}`);
+    //console.log(`[TENANT] Shop: ${req.shop_id}, User: ${req.user?.username}, Action: ${req.method} ${req.path}`);
 
     next();
   } catch (error) {

@@ -14,5 +14,6 @@ router.get('/sales-expenses', auth.isAuthorize, analyticsController.getTotalSale
 router.get('/daily-sales-trend', auth.isAuthorize, analyticsController.getDailySalesTrend);
 router.get('/purchase-trends', auth.isAuthorize, analyticsController.getPurchaseTrends);
 router.get('/food-liquor-sale', auth.isAuthorize, analyticsController.getFoodAndDrinksSale);
+router.get('/weekly-close-summary', auth.isAuthorize, analyticsController.getWeeklyCloseSummary);
 
 module.exports = router;
